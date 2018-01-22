@@ -1,3 +1,118 @@
+simulateFixedTimeLD <- function(end.time,
+                                mutation.probability,
+                                normal.reproduction.rate,
+                                reproduction.rate.ratio,
+                                intial.sensitive.population.size.per.test.tube) {
+  # recover()
+  
+  #########
+  # Setup #
+  #########
+  
+  # birth rates in each class, number of wild-types and mutants
+  B_w <- normal.reproduction.rate
+  B_m <- normal.reproduction.rate * reproduction.rate.ratio
+  
+  # Now, we need the times at which mutations occur
+  # These times come from a Non-homogenous Poisson process with a rate equal to the mutation rate times the growth rate of the wild-types
+  
+  # Get the times
+  mutant_origin_times <- generateLuriaDelbruckPoissonProcess(mutation.probability,B_w,intial.sensitive.population.size.per.test.tube,end.time)
+  
+  mutants_at_t_stop <- sum(exp(B_m*(end.time - mutant_origin_times)))
+  
+  return(mutants_at_t_stop)
+}
+
+
+calculateLDmoments <- function(end.time,
+                               mutation.probability,
+                               normal.reproduction.rate,
+                               reproduction.rate.ratio,
+                               intial.sensitive.population.size.per.test.tube) {
+  
+  B_w <- normal.reproduction.rate
+  B_m <- normal.reproduction.rate * reproduction.rate.ratio
+  
+  if ( reproduction.rate.ratio == 1 ) {
+    E_Xt <- mutation.probability*end.time*exp(B_w*end.time)
+    Var_Xt <- mutation.probability/B_w * exp(B_w*end.time) * (exp(B_w*end.time) - 1)
+  }
+  
+  res <- c(E_Xt,Var_Xt)
+  names(res) <- c("E[X(t)]","Var[X(t)]")
+  
+  return(res)
+  
+}
+
+# Function to simulate bacterial growth, takes the following arguments
+#   final.population.size: the population size (non-resistant + resistant) at which we stop simulating
+#   mutation.probability: the probability that, in dividing, a non-resistant produces a resistant offspring
+#   normal.reproduction.rate: reproduction rate of the non-resistant, as a rate for a birth-death process
+#   reproduction.rate.ratio: rate(non-resistant)/rate(resistant), ratio means we can think of it in fitness terms
+#   intial.sensitive.population.size.per.test.tube: as named
+#   intial.resistant.population.size.per.test.tube: as named
+
+growBacteriaInSilico <- function(final.population.size,
+                                 mutation.probability,
+                                 normal.reproduction.rate,
+                                 reproduction.rate.ratio,
+                                 intial.sensitive.population.size.per.test.tube,
+                                 intial.resistant.population.size.per.test.tube) {
+  
+  # recover()
+  
+  #########
+  # Setup #
+  #########
+  
+  # birth rates in each class, number of wild-types and mutants
+  B_w <- normal.reproduction.rate
+  B_m <- normal.reproduction.rate * reproduction.rate.ratio
+  
+  # number of cells currently in each class
+  N_t <- c(intial.sensitive.population.size.per.test.tube,intial.resistant.population.size.per.test.tube)
+  names(N_t) <- c("number of wild-type","number of mutants")
+  
+  # track the per-type and total rate of the birth process
+  rate_w <- N_t[1]*B_w
+  rate_m <- N_t[2]*B_m
+  total_rate <- rate_w + rate_m
+  
+  ############
+  # Simulate #
+  ############
+  
+  # Keep colonies growing until saturation population size is achieved
+  for (i in 1:(final.population.size-1)) { 
+    
+    # Calculate probability that event was a birth in wild-type
+    p_mutant_increase <- (rate_w * mutation.probability + rate_m) / total_rate
+    
+    # What kind of event happened?
+    # Birth in a wild-type or a mutant?
+    birth_in_m <- rbinom(n=1,size=1,p=p_mutant_increase)
+    if ( birth_in_m ) {
+      N_t[2] <- N_t[2] + 1
+      rate_m <- rate_m + B_m
+      total_rate <- total_rate + B_m
+    } else {
+      N_t[1] <- N_t[1] + 1
+      rate_w <- rate_w + B_w
+      total_rate <- total_rate + B_w
+    }
+    
+    # # Time until next event
+    # wt <- rexp(1,total_rate)
+    # t_elapsed <- t_elapsed + wt
+    
+  }
+  
+  return(N_t)
+  
+}
+
 # To simulate the whole experiment, we must be able to simulate the growth of the bacteria, which we do here
 
 # We have B_m the mutant reproduction time, B_w the wild-type reproduction time

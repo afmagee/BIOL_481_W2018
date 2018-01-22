@@ -1,3 +1,3 @@
-This directory contains scripts (probably going to be functions) that perform and plot a variety of simulations and analyses for BIOL 481.
+This directory contains functions that perform and plot a variety of simulations and analyses for BIOL 481.
 
-Ideally, any datasets necessary can be integrated seemlessly.
+Dispersal to students will likely take the form of uploaded files to Canvas, rather than direct download from GitHub.

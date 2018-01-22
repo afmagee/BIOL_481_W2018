@@ -1,102 +1,95 @@
-# Function to simulate bacterial growth, takes the following arguments
-#   final.population.size: the population size (non-resistant + resistant) at which we stop simulating
-#   mutation.probability: the probability that, in dividing, a non-resistant produces a resistant offspring
-#   normal.reproduction.rate: reproduction rate of the non-resistant, as a rate for a birth-death process
-#   reproduction.rate.ratio: rate(non-resistant)/rate(resistant), ratio means we can think of it in fitness terms
-#   intial.sensitive.population.size.per.test.tube: as named
-#   intial.resistant.population.size.per.test.tube: as named
-
-growBacteriaInSilico <- function(final.population.size,
-                                 mutation.probability,
-                                 normal.reproduction.rate,
-                                 reproduction.rate.ratio,
-                                 intial.sensitive.population.size.per.test.tube,
-                                 intial.resistant.population.size.per.test.tube) {
-
-  # recover()
-  
-  #########
-  # Setup #
-  #########
-  
-  # birth rates in each class, number of wild-types and mutants
-  B_w <- normal.reproduction.rate
-  B_m <- normal.reproduction.rate * reproduction.rate.ratio
-  
-  # number of cells currently in each class
-  N_t <- c(intial.sensitive.population.size.per.test.tube,intial.resistant.population.size.per.test.tube)
-  names(N_t) <- c("number of wild-type","number of mutants")
-  
-  # track the per-type and total rate of the birth process
-  rate_w <- N_t[1]*B_w
-  rate_m <- N_t[2]*B_m
-  total_rate <- rate_w + rate_m
-  
-  ############
-  # Simulate #
-  ############
-  
-  # Keep colonies growing until saturation population size is achieved
-  for (i in 1:(final.population.size-1)) { 
-    
-    # Calculate probability that event was a birth in wild-type
-    p_mutant_increase <- (rate_w * mutation.probability + rate_m) / total_rate
-    
-    # What kind of event happened?
-    # Birth in a wild-type or a mutant?
-    birth_in_m <- rbinom(n=1,size=1,p=p_mutant_increase)
-    if ( birth_in_m ) {
-      N_t[2] <- N_t[2] + 1
-      rate_m <- rate_m + B_m
-      total_rate <- total_rate + B_m
-    } else {
-      N_t[1] <- N_t[1] + 1
-      rate_w <- rate_w + B_w
-      total_rate <- total_rate + B_w
-    }
-
-    # # Time until next event
-    # wt <- rexp(1,total_rate)
-    # t_elapsed <- t_elapsed + wt
-    
+# Plot summaries of simulated Luria Delbruck experiments
+# simulated.data is the output of LuriaDelbruckInSilico()
+# data.points are, as before, the real data
+# summary.statistic works as in the Poisson model case
+# Why bother with a separate ploting function? Because the simulations here take much longer, and this saves time
+plotLuriaDelbruck <- function(simulated.data,data.points,summary.statistic=c("mean","standard.deviation","relative.variance","mean.absolute.deviation")[1]) {
+  # Compute desired summary statistic
+  if ( summary.statistic == "mean" ) {
+    summary_stats <- colMeans(simulated.data)
+    observed_stat <- mean(data.points)
+  } else if ( summary.statistic == "standard.deviation" ) {
+    summary_stats <- apply(simulated.data,2,sd)
+    observed_stat <- sd(data.points)
+  } else if ( summary.statistic == "relative.variance" ) {
+    summary_stats <- apply(simulated.data,2,var) / colMeans(simulated.data)
+    observed_stat <- var(data.points) / mean(data.points)
+  } else if ( summary.statistic == "mean.absolute.deviation" ) {
+    summary_stats <- colMeans(abs(simulated.data-colMeans(simulated.data)))
+    observed_stat <- mean(abs(data.points - mean(data.points)))
+  } else {
+    stop("Option for argumant \"summary.statistic\" not recognized")
   }
   
-  return(N_t)
+  # Calculate the posterior-predictive p-value
+  p <- sum(summary_stats > observed_stat)/ncol(simulated.data)
+  cat("Probability of seeing value of ",summary.statistic," greater than observed: ",p,"\n",sep="")
   
+  # Pre-plotting computation, is our observed value even in the range of simulated values?
+  obs_in_range <- min(summary_stats) < observed_stat && observed_stat < max(summary_stats)
+  
+  # Start plot
+  ggplot() + # We can break a line into multiple lines at math operators
+    
+    # Tell it about where the data is
+    aes(summary_stats) + 
+    
+    # Avoid 
+    expand_limits(x=observed_stat) + 
+    # 
+    
+    # Titles and axis labels
+    ggtitle("Distribution of test statistic") + xlab(summary.statistic) + 
+    
+    # Make a decision on the number of bins
+    # If our observed value is within the simulated range, we'll use 50 bins
+    # If not, we need way more bins to get any resolution on the distribution
+    geom_histogram(bins=ifelse(obs_in_range,20,200),fill="deepskyblue2") +
+    
+    # Add a line
+    geom_vline(xintercept=observed_stat,color="darkorange2",lwd=1.2)
 }
 
 # This is a function that will simulate according to the Luria-Delbruck model (as well as more general, related models)
-# Guide to 
-LuriaDelbruckInSilico <- function(number.of.tubes,
+# number.of.experiments determines how many total experiments are simulated
+# number.of.tubes determines how many tubes were reared in each experiment
+# There are a number of sets of parameters to play with
+# 1) The termination conditions
+#    * tube.volume.microliters: how much liquid is in the test tube the bacteria are grown in?
+#    * saturation.concentration.per.mL: the concentration (bacteria per microliter) at which growth stops
+#    * simulate.for.fixed.time: the default is to simulate until saturation, this allows
+#    * end.time: with simulate.for.fixed.time allows you to stop growth at some number of hours
+# 2) Factors affecting the appearence and growth of mutants
+#    * sensitive.doubling.time.hours: how many hours to double the size of the wildtype population?
+#    * doubling.time.ratio: the doubling time of the resistant divided by the doubling time of the wildtype
+#    * mutation.probability: the probability that, when a wiltype divides, it produces a mutant offspring
+#    * intial.sensitive.population.size.per.test.tube: how many sensitive bacteria are in the innoculant (assume 0 resistant)?
+# 3) Random fluctuations during plating process
+#    * enable.tube.to.plate.variability: allows us to model variability induced by pipetting technique
+#    * excess.tube.to.plate.standard.deviation: the bigger this value, the more variability (there is variability at 0, more as this term increases)
+# 4) Induced mutation (this allows us to include the Poisson model in our simulations)
+#    * induced.mutation.probability: the probability that a sensitive bacterium mutates to become resistant, post-plating, because of addition of virus
+#    * induced.mutation.standard.deviation: allows the rate of mutation to vary accross individuals, at 0, the probability is constant, the higher the value the more the rate varies around induced.mutation.probability
+LuriaDelbruckInSilico <- function(number.of.experiments,
+                                  number.of.tubes,
                                   tube.volume.microliters=300,
-                                  saturation.concentration.microliters=1e9,
+                                  plated.volume.microliters=100,
+                                  saturation.concentration.per.mL=1e9,
                                   mutation.probability=3e-9,
-                                  non.resistant.doubling.time.hours=1,
-                                  reproduction.rate.ratio=1,
+                                  sensitive.doubling.time.hours=1,
+                                  doubling.time.ratio=1,
                                   intial.sensitive.population.size.per.test.tube=10,
                                   induced.mutation.probability=0,
-                                  induced.mutation.variability=0,
+                                  induced.mutation.standard.deviation=0,
                                   enable.tube.to.plate.variability=FALSE,
-                                  excess.tube.to.plate.variability=0,
-                                  verbose=TRUE,
-                                  ...) {
-  recover()
+                                  excess.tube.to.plate.standard.deviation=0,
+                                  simulate.for.fixed.time=FALSE,
+                                  end.time=NA) {
+  # recover()
   
   #################
   # Preliminaries #
   #################
-  
-  if ( hasArg(intial.resistant.population.size.per.test.tube) ) {
-    intial_resistant_population_size_per_test_tube <- list(...)$intial.resistant.population.size.per.test.tube
-  } else {
-    intial_resistant_population_size_per_test_tube <- 0
-  }
-  
-  if ( hasArg(plated.volume.microliters) ) {
-    plated_volume_microliters <- list(...)$plated.volume.microliters
-  } else {
-    plated_volume_microliters <- 100
-  }
   
   # Error checking
   if ( induced.mutation.probability > 1) {
@@ -111,8 +104,12 @@ LuriaDelbruckInSilico <- function(number.of.tubes,
     stop("Argument \"enable.tube.to.plate.variability\" must be TRUE or FALSE")
   }
   
-  if ( excess.tube.to.plate.variability != 0 && enable.tube.to.plate.variability == FALSE ) {
-    stop("Argument \"excess.tube.to.plate.variability\" requires argument \"enable.tube.to.plate.variability\" to be TRUE")
+  if ( excess.tube.to.plate.standard.deviation != 0 && enable.tube.to.plate.variability == FALSE ) {
+    stop("Argument \"excess.tube.to.plate.standard.deviation\" requires argument \"enable.tube.to.plate.variability\" to be TRUE")
+  }
+  
+  if ( simulate.for.fixed.time && (is.na(end.time) || end.time < 0) ) {
+    stop("To simulate for fixed time, specify end time > 0")
   }
   
   ###############
@@ -120,87 +117,122 @@ LuriaDelbruckInSilico <- function(number.of.tubes,
   ###############
   
   # Find population size limit in test tubes
-  maximum_bacteria_per_tube <- saturation.concentration.microliters*tube.volume.microliters
-  
+  maximum_bacteria_per_tube <- (saturation.concentration.per.mL/1000)*tube.volume.microliters
+
   # Get birth rate from doubling time
-  normal_reproduction_rate <- log(2)/non.resistant.doubling.time.hours
+  normal_reproduction_rate <- log(2)/sensitive.doubling.time.hours
   
   # When drawing a sample of media to plate, there is variance in how many bacteria are selected
   # Here we model this with a negative binomial distribution
   # This allows us to inflate the variance over the standard Poisson/binomial models
   # We first need the mean (mu) of the distribution, given by the concentration
   # The phi parameter is inversely proportional to this excess variability, so we flip it around
-  tube_to_plate_mu <- plated_volume_microliters * saturation.concentration.microliters
-  tube_to_plate_phi <- 1/excess.tube.to.plate.variability
-
-  #####################
-  # Grow the bacteria #
-  #####################
+  tube_to_plate_mu <- plated.volume.microliters * saturation.concentration.per.mL/1000
+  tube_to_plate_phi <- 1/excess.tube.to.plate.standard.deviation
   
-  starting_bacteria <- matrix(NA,nrow=number.of.tubes,ncol=2)
-  for (i in 1:number.of.tubes) {
-    starting_bacteria[i,2] <- growBacteriaInSilico(final.population.size=maximum_bacteria_per_tube,mutation.probability=mutation.probability,normal.reproduction.rate=normal.reproduction.rate,reproduction.rate.ratio=reproduction.rate.ratio,intial.sensitive.population.size.per.test.tube=intial.sensitive.population.size.per.test.tube,intial.resistant.population.size.per.test.tube=)
+  # Go from ratio of doubling time to ratio of reproduction rates (twice as long to double is haf as fast to reproduce)
+  reproduction_rate_ratio <- 1/doubling.time.ratio
+  
+  ###################################################
+  # Simulate a number of Luria-Delbruck experiments #
+  ###################################################
+  
+  # We will store the results of each replicate experiment as a column in a matrix
+  n_resistant_final <- matrix(NA,nrow=number.of.tubes,ncol=number.of.experiments)
+  
+  # recover()
+  
+  # Each loop is now simulating a single experiment
+  for (rep in 1:number.of.experiments) {
+    
+    #####################
+    # Grow the bacteria #
+    #####################
+    
+    starting_bacteria <- matrix(NA,nrow=number.of.tubes,ncol=2)
+    
+    if ( mutation.probability > 0 ) {  
+      # We'll store the simulations in a matrix, first column is number of wild-type, second is mutants
+      for (i in 1:number.of.tubes) {
+        starting_bacteria[i,] <- simulateBacterialGrowth(final.population.size=maximum_bacteria_per_tube,mutation.probability=mutation.probability,normal.reproduction.rate=normal_reproduction_rate,reproduction.rate.ratio=reproduction_rate_ratio,intial.sensitive.population.size.per.test.tube=intial.sensitive.population.size.per.test.tube,simulate.for.fixed.time=simulate.for.fixed.time,end.time=end.time)
+      }
+    } else {
+      # No mutants, we know how many sensitve bacteria there will be from the growth rate
+      if ( simulate.for.fixed.time ) {
+        number_at_t_stop <- intial.sensitive.population.size.per.test.tube*exp(end.time*normal_reproduction_rate)
+        if ( number_at_t_stop > maximum_bacteria_per_tube) {
+          number_sensitive <- maximum_bacteria_per_tube
+        } else {
+          number_sensitive <- number_at_t_stop
+        }
+      } else {
+        number_sensitive <- maximum_bacteria_per_tube
+      }
+        
+      # normal_reproduction_rate
+      starting_bacteria[,1] <- number_sensitive
+      starting_bacteria[,2] <- 0
+    }
+    ######################
+    # Plate the bacteria #
+    ######################
+    
+    # Draw the number of bacteria/colony founding units that are plated 
+    if ( enable.tube.to.plate.variability ) {
+      # Under the variable model, we don't get exactly the same fraction every time
+      n_cfu <- rnbinom(n=number.of.tubes,mu=tube_to_plate_mu,size=tube_to_plate_phi)
+    } else {
+      # Here we assume we get exactly plated.volume.microliters/tube.volume.microliters in each pipette
+      n_cfu <- tube_to_plate_mu
+    }
+  
+    # The probability that any one of those bacteria is resistant is the frequency of resistant bacteria in that tube
+    p_resistant <- starting_bacteria[,2]/rowSums(starting_bacteria)
+    
+    # Thus the number of resistant bacteria is binomially distributed
+    n_resistant_initial <- rbinom(n=number.of.tubes,size=n_cfu,prob=p_resistant)
+    
+    # Account for directed mutation
+    if ( induced.mutation.standard.deviation != 0) {
+      # Here our model includes the mutation rate varying from bacterium to bacterium
+      # It varies according to a beta(a,b) distribution whose parameters we now compute
+      # We exploit the fact that increasing (a+b) decreases the variability in the mutation probability
+      # So what we're calling "induced.mutation.standard.deviation" is actually 1/(a+b), and we know the mean we want, and mean = a/(a+b)
+      a <- induced.mutation.standard.deviation/induced.mutation.standard.deviation
+      b <- (1 - induced.mutation.probability)/induced.mutation.standard.deviation
+      mu_induced <- rbeta(number.of.tubes*(n_cfu-n_resistant_initial),a,b)
+    } else {
+      mu_induced <- induced.mutation.probability
+    }
+    
+    n_resistant_final[,rep] <- n_resistant_initial + rbinom(n=number.of.tubes,size=n_cfu-n_resistant_initial,prob=mu_induced)
+    # Does it seem weird that we're not using the Poisson distribution here?
+    # The Poisson and the binomial are essentially equivalent when the mutation rate is very small and there are many bacteria
+    # But, the Poisson can generate any counting number
+    # Since we've already specified a number of susceptible bacteria, it would be weird to allow ourselves to suddenly have more direct-mutation-caused resistant bacteria than we had susceptible
+    # A curious person could plug in the Poisson instead and see what happens (the probability of it happening in any one sample is very small, but over many simulated experiments with many simulated tubes, it is higher)
   }
-
-  ######################
-  # Plate the bacteria #
-  ######################
-  
-  # Draw number of bacteria/colony founding units that are plated 
-  if ( excess_tube_to_plate_variability ) {
-    n_cfu <- tube_to_plate_mu
-  } else {
-    n_cfu <- rnbinom(n=number.of.tubes,mu=tube_to_plate_mu,size=tube_to_plate_phi)
-  }
-
-  # The probability that any one of those bacteria is resistant is the frequency of resistant bacteria in that tube
-  p_resistant <- starting_bacteria[,2]/maximum_bacteria_per_tube
-  
-  # Thus the number of resistant bacteria is binomially distributed
-  n_resistant_initial <- rbinom(n=number.of.tubes,size=n_cfu,prob=p_resistant)
-  
-  # Account for directed mutation
-  if ( induced.mutation.variability != 0) {
-    # Here our model includes the mutation rate varying from bacterium to bacterium
-    # It varies according to a beta(a,b) distribution whose parameters we now compute
-    # We exploit the fact that increasing (a+b) decreases the variability in the mutation probability
-    # So what we're calling "induced.mutation.variability" is actually 1/(a+b), and we know the mean we want, and mean = a/(a+b)
-    a <- induced.mutation.variability/induced.mutation.variability
-    b <- (1 - induced.mutation.probability)/induced.mutation.variability
-    mu_induced <- rbeta(number.of.tubes*(n_cfu-n_resistant_initial),a,b)
-  } else {
-    mu_induced <- induced.mutation.probability
-  }
-  
-  n_resistant_final <- n_resistant_initial + rbinom(n=number.of.tubes,size=n_cfu-n_resistant_initial,prob=mu_induced)
-  # Does it seem weird that we're not using the Poisson distribution here?
-  # The Poisson and the binomial are essentially equivalent when the mutation rate is very small and there are many bacteria
-  # But, the Poisson can generate any counting number
-  # Since we've already specified a number of susceptible bacteria, it would be weird to allow ourselves to suddenly have more direct-mutation-caused resistant bacteria than we had susceptible
-  # A curious person could plug in the Poisson instead and see what happens (the probability of it happening in any one sample is very small, but over many simulated experiments with many simulated tubes, it is higher)
   
   return(n_resistant_final)
 }
 
-generateLuriaDelbruckPoissonProcess <- function(mu,beta,end.time) {
+# This function simulates the growth of bacteria in test tubes
+# It is separate from the above function so that the above function is "only" 130 lines, not 250
+# Parameters: 
+#             final.population.size: the population size at saturation
+#             mutation.probability: the probability that a sensitive bateria produces a resistant when dividing
+#             normal.reproduction.rate: r in e^rt for exponential growth of bacteria
+#             intial.sensitive.population.size.per.test.tube: the starting number of the wild-type bacteria
+#             simulate.for.fixed.time: should we stop at a given time, rather than at saturation?
+#             end time: the (optional) time at which growth is terminated
 
-  # The integrated rate allows us to generate a number of events that happened in the interval
-  integrated_rate <- mu/beta*(exp(beta*end.time) - 1)
-  n_events <- rpois(1,integrated_rate)
-  
-  # Pasupathy's Algorithm #5
-  u <- runif(n_events)
-  
-  times <- log(u)/beta + end.time
-  
-  return(sort(times))
-}
-
-simulateDeterministicStochastic <- function(final.population.size,
-                                            mutation.probability,
-                                            normal.reproduction.rate,
-                                            reproduction.rate.ratio,
-                                            intial.sensitive.population.size.per.test.tube) {
+simulateBacterialGrowth <- function(final.population.size,
+                                    mutation.probability,
+                                    normal.reproduction.rate,
+                                    reproduction.rate.ratio,
+                                    intial.sensitive.population.size.per.test.tube,
+                                    simulate.for.fixed.time=FALSE,
+                                    end.time=NA) {
   # recover()
   
   #########
@@ -214,28 +246,68 @@ simulateDeterministicStochastic <- function(final.population.size,
   # Now, we need the times at which mutations occur
   # These times come from a Non-homogenous Poisson process with a rate equal to the mutation rate times the growth rate of the wild-types
   # To ensure that we have enough event times, we generate times between the start of the process and the time the wild-types reach saturation
-  
-  
-  #### FIX THIS this assumes initially 1 wildtype (and 0 mutants)
-  t_saturation <- log(final.population.size)/B_w
+  t_saturation <- log(final.population.size/intial.sensitive.population.size.per.test.tube)/(B_w)
   
   # Get the times
-  mutant_origin_times <- generateLuriaDelbruckPoissonProcess(mutation.probability,B_w,t_saturation)
+  mutant_origin_times <- generateLuriaDelbruckPoissonProcess(mu=mutation.probability,N0=intial.sensitive.population.size.per.test.tube,beta=B_w,end.time=t_saturation)
   
   aliveAtT <- function(t_,n_mutations) {
     alive <- round(intial.sensitive.population.size.per.test.tube*exp(B_w*t_)) + sum(round(exp(B_m*(t_ - mutant_origin_times))))
     return(alive)
   }
   
-  # We know at the t_saturation we have too many bacteria (we designed it so)
-  # Work backwards until we find a time where we don't have too many bacteria
+  # Possible early termination 1: are there mutants?
+  if ( length(mutant_origin_times) == 0 ) {
+    if ( simulate.for.fixed.time ) {
+      # Population size at user-defined end-time
+      wt_at_t_stop <- round(intial.sensitive.population.size.per.test.tube*exp(B_w*t_))
+      wt_at_t_stop <- min(wt_at_t_stop,final.population.size)
+    } else {
+      # Saturation size
+      wt_at_t_stop <- round(intial.sensitive.population.size.per.test.tube*exp(B_w*t_saturation))
+    } 
+    mutants_at_t_stop <- 0
+    bacteria <- c(wt_at_t_stop,mutants_at_t_stop)
+    return(bacteria)
+  }
+  
+  # Possible early termination 1: user-defined end time (before saturation)
+  if ( simulate.for.fixed.time ) {
+    
+    # Count the bacteria
+    N_t <- aliveAtT(t_)
+    
+    # We have checked that the user end time does not exceed the maximum saturation time
+    # We have to make sure the user-defined end time isn't past the point of saturation
+    t_ <- end.time
+    
+    if ( N_t < final.population.size ) {
+      wt_at_t_stop <- round(intial.sensitive.population.size.per.test.tube*exp(B_w*t_))
+      mutants_at_t_stop <- sum(round(exp(B_m*(t_ - mutant_origin_times))))
+      bacteria <- c(wt_at_t_stop,mutants_at_t_stop)
+      return(bacteria)
+    } else {
+      warning("Specified end point past time of saturation, simulations will be slower.")
+    }
+  }
+  
+  
+  
+  # Now we find the time that this population reaches saturation
+  # We do this numerically (we ave the computer search for us), since we can't write a general enough analytical solution
+  # To do this, we need to find a time when we were below saturation (a lower bound for searching)
+  
+  # Index the times of mutation events (these are good places to test for bounds)
   i <- length(mutant_origin_times)
+  
+  # We first check if the last mutation event could work (good guess if not a user-defined end-time)
   t_ <- mutant_origin_times[i]
   
   # Count the bacteria
   N_t <- aliveAtT(t_)
   
-  # We may not enter this loop, that's fine
+  
+  # We may not enter this loop, that's fine (faster, in fact), it means our first guess was good
   while ( N_t > final.population.size ) {
     i <- i - 1
     t_ <- mutant_origin_times[i]
@@ -247,7 +319,6 @@ simulateDeterministicStochastic <- function(final.population.size,
   
   # Now we find the time that this population reaches saturation
   # We do this numerically, since we can't write a general enough analytical solution
-  
   # This function is minimized when t_stop is correct
   fn <- function(t_stop) {
     N_t <- aliveAtT(t_stop)
@@ -256,59 +327,35 @@ simulateDeterministicStochastic <- function(final.population.size,
   
   # Find the stopping time
   res <- optimize(fn,c(t_,t_saturation))
+  t_ <- res$minimum
   
   # Find and return number of mutants at stopping time
-  mutants_at_t_stop <- sum(round(exp(B_m*(t_ - mutant_origin_times))))
+  # wt_at_t_stop <- round(intial.sensitive.population.size.per.test.tube*exp(B_w*t_))
+  # mutants_at_t_stop <- sum(round(exp(B_m*(t_ - mutant_origin_times))))
+  mutants_at_t_stop <- round(sum(exp(B_m*(t_ - mutant_origin_times))))
+  wt_at_t_stop <- final.population.size - mutants_at_t_stop
+  bacteria <- c(wt_at_t_stop,mutants_at_t_stop)
   
-  return(mutants_at_t_stop)
+  return(bacteria)
 }
 
-
-simulateFixedTimeLD <- function(end.time,
-                                            mutation.probability,
-                                            normal.reproduction.rate,
-                                            reproduction.rate.ratio,
-                                            intial.sensitive.population.size.per.test.tube) {
-  # recover()
+# This is a helper function for simulating bacterial growth, it simulates the times of mutations
+# Generates event times from 0 to end.time from a Luria-Delbruck-esque NHPP
+# Parameters: 
+#             mu: the mutation rate/probability
+#             beta: the growth rate of the wild-type bacteria
+#             N0: the starting number of the wild-type bacteria
+#             end time: the time at which growth is terminated
+generateLuriaDelbruckPoissonProcess <- function(mu,beta,N0,end.time) {
   
-  #########
-  # Setup #
-  #########
+  # The integrated rate allows us to generate a number of events that happened in the interval
+  integrated_rate <- mu*N0/beta*(exp(beta*end.time) - 1)
+  n_events <- rpois(1,integrated_rate)
   
-  # birth rates in each class, number of wild-types and mutants
-  B_w <- normal.reproduction.rate
-  B_m <- normal.reproduction.rate * reproduction.rate.ratio
+  # Pasupathy's Algorithm #5
+  u <- runif(n_events)
+  times <- log(u * exp(beta*end.time) - u + 1)/(beta)
   
-  # Now, we need the times at which mutations occur
-  # These times come from a Non-homogenous Poisson process with a rate equal to the mutation rate times the growth rate of the wild-types
-  # To ensure that we have enough event times, we generate times between the start of the process and the time the wild-types reach saturation
-  
-  
-  # Get the times
-  mutant_origin_times <- generateLuriaDelbruckPoissonProcess(mutation.probability,B_w,end.time)
-  
-  mutants_at_t_stop <- sum(exp(B_m*(end.time - mutant_origin_times)))
-
-  return(mutants_at_t_stop)
+  return(sort(times))
 }
 
-calculateLDmoments <- function(end.time,
-                               mutation.probability,
-                               normal.reproduction.rate,
-                               reproduction.rate.ratio,
-                               intial.sensitive.population.size.per.test.tube) {
-  
-  B_w <- normal.reproduction.rate
-  B_m <- normal.reproduction.rate * reproduction.rate.ratio
-  
-  if ( reproduction.rate.ratio == 1 ) {
-    E_Xt <- mutation.probability*end.time*exp(B_w*end.time)
-    Var_Xt <- mutation.probability/B_w * exp(B_w*end.time) * (exp(B_w*end.time) - 1)
-  }
-  
-  res <- c(E_Xt,Var_Xt)
-  names(res) <- c("E[X(t)]","Var[X(t)]")
-  
-  return(res)
-  
-}
