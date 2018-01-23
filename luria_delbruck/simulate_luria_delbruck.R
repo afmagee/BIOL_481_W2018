@@ -1,55 +1,3 @@
-# Plot summaries of simulated Luria Delbruck experiments
-# simulated.data is the output of LuriaDelbruckInSilico()
-# data.points are, as before, the real data
-# summary.statistic works as in the Poisson model case
-# Why bother with a separate ploting function? Because the simulations here take much longer, and this saves time
-plotLuriaDelbruck <- function(simulated.data,data.points,summary.statistic=c("mean","standard.deviation","relative.variance","mean.absolute.deviation")[1]) {
-  # Compute desired summary statistic
-  if ( summary.statistic == "mean" ) {
-    summary_stats <- colMeans(simulated.data)
-    observed_stat <- mean(data.points)
-  } else if ( summary.statistic == "standard.deviation" ) {
-    summary_stats <- apply(simulated.data,2,sd)
-    observed_stat <- sd(data.points)
-  } else if ( summary.statistic == "relative.variance" ) {
-    summary_stats <- apply(simulated.data,2,var) / colMeans(simulated.data)
-    observed_stat <- var(data.points) / mean(data.points)
-  } else if ( summary.statistic == "mean.absolute.deviation" ) {
-    summary_stats <- colMeans(abs(simulated.data-colMeans(simulated.data)))
-    observed_stat <- mean(abs(data.points - mean(data.points)))
-  } else {
-    stop("Option for argumant \"summary.statistic\" not recognized")
-  }
-  
-  # Calculate the posterior-predictive p-value
-  p <- sum(summary_stats > observed_stat)/ncol(simulated.data)
-  cat("Probability of seeing value of ",summary.statistic," greater than observed: ",p,"\n",sep="")
-  
-  # Pre-plotting computation, is our observed value even in the range of simulated values?
-  obs_in_range <- min(summary_stats) < observed_stat && observed_stat < max(summary_stats)
-  
-  # Start plot
-  ggplot() + # We can break a line into multiple lines at math operators
-    
-    # Tell it about where the data is
-    aes(summary_stats) + 
-    
-    # Avoid 
-    expand_limits(x=observed_stat) + 
-    # 
-    
-    # Titles and axis labels
-    ggtitle("Distribution of test statistic") + xlab(summary.statistic) + 
-    
-    # Make a decision on the number of bins
-    # If our observed value is within the simulated range, we'll use 50 bins
-    # If not, we need way more bins to get any resolution on the distribution
-    geom_histogram(bins=ifelse(obs_in_range,20,200),fill="deepskyblue2") +
-    
-    # Add a line
-    geom_vline(xintercept=observed_stat,color="darkorange2",lwd=1.2)
-}
-
 # This is a function that will simulate according to the Luria-Delbruck model (as well as more general, related models)
 # number.of.experiments determines how many total experiments are simulated
 # number.of.tubes determines how many tubes were reared in each experiment
@@ -169,7 +117,6 @@ LuriaDelbruckInSilico <- function(number.of.experiments,
         number_sensitive <- maximum_bacteria_per_tube
       }
         
-      # normal_reproduction_rate
       starting_bacteria[,1] <- number_sensitive
       starting_bacteria[,2] <- 0
     }
