@@ -58,54 +58,7 @@ poissonBayes <- function(real.data, num.draws=10000, summary.statistic=c("mean",
   # Fold replicates into a table
   y_rep <- matrix(y_rep,nrow=length(real.data),ncol=num.draws,byrow=TRUE)
   
-  # recover()
-  
-  # Compute desired summary statistic
-  if ( summary.statistic == "mean" ) {
-    summary_stats <- colMeans(y_rep)
-    observed_stat <- mean(real.data)
-  } else if ( summary.statistic == "standard.deviation" ) {
-    summary_stats <- apply(y_rep,2,sd)
-    observed_stat <- sd(real.data)
-  } else if ( summary.statistic == "relative.variance" ) {
-    summary_stats <- apply(y_rep,2,var) / colMeans(y_rep)
-    observed_stat <- var(real.data) / mean(real.data)
-  } else if ( summary.statistic == "mean.absolute.deviation" ) {
-    summary_stats <- colMeans(abs(y_rep-colMeans(y_rep)))
-    observed_stat <- mean(abs(real.data - mean(real.data)))
-  } else {
-    stop("Option for argumant \"summary.statistic\" not recognized")
-  } 
-  # recover()
-  
-  # Calculate the posterior-predictive p-value
-  pppval <- sum(summary_stats > observed_stat)/num.draws
-  cat("Posterior-predictive p-value:",pppval,"\n")
-  
-  # Pre-plotting computation, is our observed value even in the range of simulated values?
-  obs_in_range <- min(summary_stats) < observed_stat && observed_stat < max(summary_stats)
-  
-  # Start plot
-  ggplot() + # We can break a line into multiple lines at math operators
-    
-    # Tell it about where the data is
-    aes(summary_stats) + 
-    
-    # Avoid 
-    expand_limits(x=observed_stat) + 
-    # 
-    
-    # Titles and axis labels
-    ggtitle("Posterior-predictive distribution") + xlab(summary.statistic) + 
-    
-    # Make a decision on the number of bins
-    # If our observed value is within the simulated range, we'll use 50 bins
-    # If not, we need way more bins to get any resolution on the distribution
-    geom_histogram(bins=ifelse(obs_in_range,50,500),fill="deepskyblue2") +
-    
-    # Add a line
-    geom_vline(xintercept=observed_stat,color="darkorange2",lwd=1.2)
-  
+  simulationVisualSummary(y_rep, real.data)
 }
 
 # simulated.data is the simulated data, as a matrix (if you call this on any data generated here, it will be appropriately formatted)
@@ -118,8 +71,8 @@ simulationVisualSummary <- function(simulated.data,real.data) {
   sim_means <- colMeans(simulated.data)
   observed_mean <- mean(real.data)
   
-  sim_vars <- apply(simulated.data,2,sd)
-  observed_var <- sd(real.data)
+  sim_vars <- apply(simulated.data,2,var)
+  observed_var <- var(real.data)
   
   sim_rel_vars <- apply(simulated.data,2,var) / colMeans(simulated.data)
   observed_rel_var <- var(real.data) / mean(real.data)
@@ -175,7 +128,7 @@ simulationVisualSummary <- function(simulated.data,real.data) {
     aes(sim_rel_vars) + 
     expand_limits(x=observed_rel_var) + 
     ggtitle("Distribution of test statistic") + 
-    xlab("relative variance") + 
+    xlab("variance/mean") + 
     geom_histogram(bins=ifelse(obs_rel_var_in_range,50,500),fill="deepskyblue2") +
     geom_vline(xintercept=observed_rel_var,color="darkorange2",lwd=1.2)
   
