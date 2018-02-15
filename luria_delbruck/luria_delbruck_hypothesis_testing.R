@@ -66,24 +66,24 @@ poissonBayes <- function(real.data, num.draws=10000, summary.statistic=c("mean",
 simulationVisualSummary <- function(simulated.data,real.data) {
 
   # recover()
-  
+
   # Compute all summary statistics
   sim_means <- colMeans(simulated.data)
   observed_mean <- mean(real.data)
-  
+
   sim_vars <- apply(simulated.data,2,var)
   observed_var <- var(real.data)
-  
+
   sim_rel_vars <- apply(simulated.data,2,var) / colMeans(simulated.data)
   observed_rel_var <- var(real.data) / mean(real.data)
-  
+
   # Skewness is not as informative here as I imagined
   # sim_nonparametric_skews <- colMeans(simulated.data) - apply(simulated.data,2,median)
   # observed_nonparametric_skew <- mean(simulated.data) - median(simulated.data)
-  
+
   sim_kurtosis <- apply(simulated.data,2,kurtosis)
   observed_kurtosis <- kurtosis(real.data)
-  
+
   # Calculate the posterior-predictive p-values
   p_mean <- sum(sim_means > observed_mean)/length(sim_means)
   p_var <- sum(sim_vars > observed_var)/length(sim_vars)
@@ -95,59 +95,59 @@ simulationVisualSummary <- function(simulated.data,real.data) {
   cat("Probability of seeing value of relative variance greater than observed: ",p_rel_var,"\n",sep="")
   # cat("Probability of seeing value of skewness          greater than observed: ",p_skew,"\n",sep="")
   cat("Probability of seeing value of kurtosis          greater than observed: ",p_kurt,"\n",sep="")
-  
+
   # Prepare for plotting, is our observed value even in the range of simulated values?
   obs_mean_in_range <- min(sim_means) < observed_mean && max(sim_means) > observed_mean
   obs_var_in_range <- min(sim_vars) < observed_var && max(sim_vars) > observed_var
   obs_rel_var_in_range <- min(sim_rel_vars) < observed_rel_var && max(sim_rel_vars) > observed_rel_var
   # obs_nonparametric_skew_in_range <- min(sim_nonparametric_skews) < observed_nonparametric_skew && max(sim_nonparametric_skews) > observed_nonparametric_skew
   obs_kurtosis_in_range <- min(sim_kurtosis) < observed_kurtosis && max(sim_kurtosis) > observed_kurtosis
-  
+
   # Start plot, save as an object (weird, right?)
-  plot_mean <- ggplot() + 
+  plot_mean <- ggplot() +
     # Tell it about where the data is
-    aes(sim_means) + 
+    aes(sim_means) +
     # Make sure we can see the real value, even if it's far away
-    expand_limits(x=observed_mean) + 
+    expand_limits(x=observed_mean) +
     # Titles and axis labels
-    ggtitle("Distribution of test statistic") + xlab("mean") + 
+    ggtitle("Distribution of test statistic") + xlab("mean") +
     # The actual histogram (with on-the-fly number of bins)
     geom_histogram(breaks=pretty(sim_means,n=ifelse(obs_mean_in_range,50,500),min.n=ifelse(obs_mean_in_range,40,400)),fill="deepskyblue2") +
     # The real value
     geom_vline(xintercept=observed_mean,color="darkorange2",lwd=1.2)
-  
-  plot_var <- ggplot() + 
-    aes(sim_vars) + 
-    expand_limits(x=observed_var) + 
-    ggtitle("Distribution of test statistic") + 
-    xlab("variance") + 
+
+  plot_var <- ggplot() +
+    aes(sim_vars) +
+    expand_limits(x=observed_var) +
+    ggtitle("Distribution of test statistic") +
+    xlab("variance") +
     geom_histogram(bins=ifelse(obs_var_in_range,50,500),fill="deepskyblue2") +
     geom_vline(xintercept=observed_var,color="darkorange2",lwd=1.2)
-  
-  plot_rel_var <- ggplot() + 
-    aes(sim_rel_vars) + 
-    expand_limits(x=observed_rel_var) + 
-    ggtitle("Distribution of test statistic") + 
-    xlab("variance/mean") + 
+
+  plot_rel_var <- ggplot() +
+    aes(sim_rel_vars) +
+    expand_limits(x=observed_rel_var) +
+    ggtitle("Distribution of test statistic") +
+    xlab("variance/mean") +
     geom_histogram(bins=ifelse(obs_rel_var_in_range,50,500),fill="deepskyblue2") +
     geom_vline(xintercept=observed_rel_var,color="darkorange2",lwd=1.2)
-  
-  # plot_nonparametric_skew <- ggplot() + 
-  #   aes(sim_nonparametric_skews) + 
-  #   expand_limits(x=observed_nonparametric_skew) + 
-  #   ggtitle("Distribution of test statistic") + 
-  #   xlab("skewness") + 
+
+  # plot_nonparametric_skew <- ggplot() +
+  #   aes(sim_nonparametric_skews) +
+  #   expand_limits(x=observed_nonparametric_skew) +
+  #   ggtitle("Distribution of test statistic") +
+  #   xlab("skewness") +
   #   geom_histogram(bins=ifelse(obs_nonparametric_skew_in_range,50,500),fill="deepskyblue2") +
   #   geom_vline(xintercept=observed_nonparametric_skew,color="darkorange2",lwd=1.2)
 
-  plot_kurtosis <- ggplot() + 
-    aes(sim_kurtosis) + 
-    expand_limits(x=observed_kurtosis) + 
-    ggtitle("Distribution of test statistic") + 
-    xlab("kurtosis") + 
+  plot_kurtosis <- ggplot() +
+    aes(sim_kurtosis) +
+    expand_limits(x=observed_kurtosis) +
+    ggtitle("Distribution of test statistic") +
+    xlab("kurtosis") +
     geom_histogram(bins=ifelse(obs_kurtosis_in_range,25,250),fill="deepskyblue2") +
     geom_vline(xintercept=observed_kurtosis,color="darkorange2",lwd=1.2)
-  
+
   grid.arrange(plot_mean, plot_var, plot_rel_var, plot_kurtosis, ncol=2)
 }
 

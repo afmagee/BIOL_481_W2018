@@ -16,7 +16,7 @@
 #    * enable.tube.to.plate.variability: allows us to model variability induced by pipetting technique
 # 4) Induced mutation (this allows us to include the Poisson model in our simulations)
 #    * induced.mutation.probability: the probability that a sensitive bacterium mutates to become resistant, post-plating, because of addition of virus
-#    * induced.mutation.standard.deviation: allows the rate of mutation to vary accross individuals in the population from which the innoculant was taken, thus giving some plates higher mutation rates than others
+#    * induced.mutation.probability.standard.deviation: allows the rate of mutation to vary accross individuals in the population from which the innoculant was taken, thus giving some plates higher mutation rates than others
 LuriaDelbruckInSilico <- function(number.of.experiments,
                                   number.of.tubes,
                                   tube.volume.microliters=200,
@@ -27,9 +27,8 @@ LuriaDelbruckInSilico <- function(number.of.experiments,
                                   resistant.doubling.time.hours=2,
                                   intial.sensitive.population.size.per.test.tube=1,
                                   induced.mutation.probability=1e-8,
-                                  induced.mutation.standard.deviation=0,
+                                  induced.mutation.probability.standard.deviation=0,
                                   enable.tube.to.plate.variability=FALSE,
-                                  excess.tube.to.plate.standard.deviation=0,
                                   simulate.for.fixed.time=FALSE,
                                   end.time=NA) {
   # recover()
@@ -43,22 +42,27 @@ LuriaDelbruckInSilico <- function(number.of.experiments,
     stop("Probabilities are in [0,1], invalid input to argument \"induced.mutation.probability\" ")
   }
   
-  if ( mutation.probability > 1) {
+  if ( mutation.probability > 1 ) {
     stop("Probabilities are in [0,1], invalid input to argument \"mutation.probability\" ")
+  } else if ( mutation.probability > 0.01 ) {
+    stop("This mutation rate will change >1% of the bacerial genome per generation. Please specify a rate that will allow bacteria to survive.")
   }
   
   if ( !(enable.tube.to.plate.variability == TRUE || enable.tube.to.plate.variability == FALSE) ) {
     stop("Argument \"enable.tube.to.plate.variability\" must be TRUE or FALSE")
   }
 
-  if ( induced.mutation.probability == FALSE && excess.tube.to.plate.standard.deviation != 0 ) {
-    stop("Argument \"excess.tube.to.plate.standard.deviation\" requires \"induced.mutation.probability\">0")
-  }
-  
   if ( simulate.for.fixed.time && (is.na(end.time) || end.time < 0) ) {
     stop("To simulate for fixed time, specify end time > 0")
   }
   
+  if ( induced.mutation.probability.standard.deviation > induced.mutation.probability * 100 ) {
+    stop("Argument \"induced.mutation.probability.standard.deviation\" is too large relative to induced.mutation.probability, try thinking about the relative variance/standard deviation to pick a reasonable value")
+  }
+  
+  if ( plated.volume.microliters > tube.volume.microliters ) {
+    stop("Cannot have argument \"plated.volume.microliters\" larger than argument \"tube.volume.microliters\"")
+  }
   ###############
   # Useful math #
   ###############
@@ -69,12 +73,10 @@ LuriaDelbruckInSilico <- function(number.of.experiments,
   # Get birth rate from doubling time
   normal_reproduction_rate <- log(2)/sensitive.doubling.time.hours
   
-  # When drawing a sample of media to plate, there is variance in how many bacteria are selected
-  # Here we model this with a negative binomial distribution
-  # This allows us to inflate the variance over the standard Poisson/binomial models
-  # We first need the mean (mu) of the distribution, given by the concentration
-  # The phi parameter is inversely proportional to this excess variability, so we flip it around
-  tube_to_plate_mean <- plated.volume.microliters * saturation.concentration.per.mL/1000
+  # When drawing a sample of media to plate, there may be variance in how many bacteria are selected
+  # We would expect to get the number of bacteria in the colony (given by saturation constant and volume)
+  # We might get fewer, by leaving some in the tube
+  tube_to_plate_expectation <- plated.volume.microliters * saturation.concentration.per.mL/1000
 
   # Go from ratio of doubling time to ratio of reproduction rates (twice as long to double is haf as fast to reproduce)
   
@@ -126,27 +128,36 @@ LuriaDelbruckInSilico <- function(number.of.experiments,
     
     # Draw the number of bacteria/colony founding units that are plated 
     if ( enable.tube.to.plate.variability ) {
-      # Under the variable model, we don't get exactly the same fraction every time
-      # It may seem a little weird to allow there to be more than the "mean" (which is the concentration * the volume)
-      # One could see this as accounting for minor fluctuations around the saturation constant (or as a modeling simplification)
-      n_cfu <- rpois(n=number.of.tubes,lambda=tube_to_plate_mean)
+      # Under the variable model, we may leave some liquid in the test tube
+      # We model this with a beta distribution on the % of liquid (and thus bacteria) drawn up
+      # The distribution has a mode of 100%, and about a 5% chance of getting less than 85% of the liquid
+      n_cfu <- round(rbeta(n=number.of.tubes,20,1)*tube_to_plate_expectation)
     } else {
       # Here we assume we get exactly plated.volume.microliters/tube.volume.microliters in each pipette
-      n_cfu <- tube_to_plate_mean
+      n_cfu <- tube_to_plate_expectation
+    }
+    
+    # If there is liquid left in the tube (either due to pipetting error or not plating all of it), we do not get all the bacteria
+    # Therefore, we must account for whether we get the expected fraction of mutants or not
+    if ( (plated.volume.microliters < tube.volume.microliters) || enable.tube.to.plate.variability ) {
+      # The probability that any one of those bacteria is resistant is the frequency of resistant bacteria in that tube
+      p_resistant <- starting_bacteria[,2]/rowSums(starting_bacteria)
+      
+      # Thus the number of resistant bacteria is binomially distributed
+      n_resistant_initial <- rbinom(n=number.of.tubes,size=n_cfu,prob=p_resistant)
+      
+    } else {
+      # We got all the bacteria, no variability
+      n_resistant_initial <- starting_bacteria[,2]
     }
   
-    # The probability that any one of those bacteria is resistant is the frequency of resistant bacteria in that tube
-    p_resistant <- starting_bacteria[,2]/rowSums(starting_bacteria)
-    
-    # Thus the number of resistant bacteria is binomially distributed
-    n_resistant_initial <- rbinom(n=number.of.tubes,size=n_cfu,prob=p_resistant)
     
     # Account for directed mutation
-    if ( induced.mutation.standard.deviation != 0 ) {
+    if ( induced.mutation.probability.standard.deviation != 0 ) {
       # Here we have more variation than a simple Poisson distribution
       # We do that by simulating from the Negative Binomial distribution (in two steps, as can be seen as a Poisson with a variable rate, where the rate varies by a gamma distribution)
       # First we get the parameters of the gamma distribution (from mean = mutation probability, and user-defined standard deviation)
-      induced_mutation_scale <- (induced.mutation.standard.deviation^2)/induced.mutation.probability
+      induced_mutation_scale <- (induced.mutation.probability.standard.deviation^2)/induced.mutation.probability
       induced_mutation_shape <- induced.mutation.probability/induced_mutation_scale
       # Now we generate a range of lambdas
       induced_mutation_lambda <- rgamma(number.of.tubes,shape=induced_mutation_shape,scale=induced_mutation_scale) * (n_cfu-n_resistant_initial)
@@ -154,6 +165,10 @@ LuriaDelbruckInSilico <- function(number.of.experiments,
       induced_mutation_lambda <- induced.mutation.probability * (n_cfu-n_resistant_initial)
     }
     n_resistant_final[,rep] <- n_resistant_initial + rpois(n=number.of.tubes,lambda=induced_mutation_lambda)
+  }
+  
+  if ( sum(n_resistant_final) == 0 ) {
+    stop("No mutants in any simulation, please adjust mutation rate, saturation constant, or simulation time as appropriate.")
   }
   
   # recover()
@@ -232,7 +247,7 @@ simulateBacterialGrowth <- function(final.population.size,
       bacteria <- c(wt_at_t_stop,mutants_at_t_stop)
       return(bacteria)
     } else {
-      warning("Specified end point past time of saturation, simulations will be slower.")
+      stop("Specified time for simulations goes past time of saturation. Please either simulate to saturation or specify a shorter time.")
     }
   }
   
@@ -295,6 +310,15 @@ generateLuriaDelbruckPoissonProcess <- function(mu,beta,N0,end.time) {
   
   # The integrated rate allows us to generate a number of events that happened in the interval
   integrated_rate <- mu*N0/beta*(exp(beta*end.time) - 1)
+  
+  # Catch cases where the expected number of simulated mutation rate is insanely high
+  if ( integrated_rate > 20 ) {
+    warning("Suspiciously many mutations in simulation. Please check values of mutation rate, simulation time (if applicable), and/or saturation constant.",immediate.=TRUE)
+  } else if ( integrated_rate > 1000 ) {
+    stop("Too many mutations to simulate. Please check values of mutation rate, simulation time (if applicable), and/or saturation constant.")
+  }
+  
+  # How many events occurred?
   n_events <- rpois(1,integrated_rate)
   
   # Pasupathy's Algorithm #5
@@ -307,13 +331,13 @@ generateLuriaDelbruckPoissonProcess <- function(mu,beta,N0,end.time) {
 # For those who explored the directed mutation plus variable mutation rate model, this function may help
 # It shows you how likely a range of mutation rates are under the settings of this model
 # The plotted dashed green line is the average
-# The inputs induced.mutation.probability and induced.mutation.standard.deviation work as in LuriaDelbruckInSilico
+# The inputs induced.mutation.probability and induced.mutation.probability.standard.deviation work as in LuriaDelbruckInSilico
 # evaluate.probabilities.at: function will report the probability that a bacterium has a mutation rate greater than these values
-visualizeInducedMutationVariance <- function(induced.mutation.probability,induced.mutation.standard.deviation,evaluate.probabilities.at=c(1e-10,1e-9,1e-8,1e-7,1e-6)) {
+visualizeInducedMutationVariance <- function(induced.mutation.probability,induced.mutation.probability.standard.deviation,evaluate.probabilities.at=c(1e-10,1e-9,1e-8,1e-7,1e-6)) {
   # recover()
   
   # Gamma parameters
-  induced_mutation_scale <- (induced.mutation.standard.deviation^2)/induced.mutation.probability
+  induced_mutation_scale <- (induced.mutation.probability.standard.deviation^2)/induced.mutation.probability
   induced_mutation_shape <- induced.mutation.probability/induced_mutation_scale
   
   # Find an upper limit to the plot

@@ -34,8 +34,8 @@ simulatePopulationCycling <- function(H0=10,
     Pt[1] <- P0
     
     # Save time by batch-computing noise
-    hnoise <- sig*rnorm(nsteps-1,0,sig)
-    pnoise <- sig*rnorm(nsteps-1,0,sig)
+    hnoise <- rnorm(nsteps-1,0,sig)
+    pnoise <- rnorm(nsteps-1,0,sig)
     
     # Simulate
     for (t in 1:(nsteps-1)) {
@@ -67,25 +67,25 @@ simulatePopulationCycling <- function(H0=10,
   Ht <- Ht[seq(1,nsteps,length.out=thin_to)]
   Pt <- Pt[seq(1,nsteps,length.out=thin_to)]
   
-  plot(x=seq(1,elapsed.time,length.out=thin_to),y=Ht,type="l",col="blue",ylab="population size(s)",xlab="time",ylim=c(0,max(prey)))
-  lines(x=seq(1,elapsed.time,length.out=thin_to),y=Pt,type="l",col="red")
+  plot(x=seq(1,elapsed.time,length.out=thin_to),y=Ht,type="l",lty=2,col="blue",ylab="population size(s)",xlab="time",ylim=c(0,max(prey)))
+  lines(x=seq(1,elapsed.time,length.out=thin_to),y=Pt,type="l",lty=2,col="red")
   
-  matplot(x=seq(1,elapsed.time,length.out=thin_to),y=prey,type="l",col="#0000ff50",lty=1,lwd=0.5,add=TRUE)
-  matplot(x=seq(1,elapsed.time,length.out=thin_to),y=pred,type="l",col="#ff000050",lty=1,lwd=0.5,add=TRUE)
+  matplot(x=seq(1,elapsed.time,length.out=thin_to),y=prey,type="l",col="#0000ff90",lty=1,lwd=0.5,add=TRUE)
+  matplot(x=seq(1,elapsed.time,length.out=thin_to),y=pred,type="l",col="#ff000090",lty=1,lwd=0.5,add=TRUE)
   
   # plot(Ht/Ht[1],type="l")
   # lines(Pt/Pt[1],lty=3)
   # abline(h=0)
 }
 
-system.time(simulatePopulationCycling(elapsed.time=50,num.replicates=20))
+# system.time(simulatePopulationCycling(elapsed.time=50,num.replicates=20))
 
 
 
-simulatePopulationCycling(elapsed.time=50,num.replicates=20,noise.level=20)
+simulatePopulationCycling(elapsed.time=3.4,num.replicates=100,noise.level=2)
 
 
-simulatePopulationCycling(elapsed.time=50,num.replicates=100,noise.level=20)
+system.time(simulatePopulationCycling(elapsed.time=50,num.replicates=1,noise.level=1))
 
 
 lynxhare <- read_csv("~/Downloads/lynxhare.csv")
