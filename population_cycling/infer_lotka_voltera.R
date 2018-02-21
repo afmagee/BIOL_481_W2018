@@ -1,7 +1,11 @@
+# Here we simulate a trajectory with the notation following Bartlet
+# Ht is the prey population size at time t, Pt the predator population size
 sampleLKtrajectory <- function(H0,P0,alpha1,alpha2,beta1,beta2,sampled.times,n.steps) {
   # recover()
   
   # Calculate time slice size
+  # We just take tiny steps along the population trajectory given the slope at an instant
+  # If the step size is sufficiently small, this is a passable approximation of more complicated techniques
   h <- (max(sampled.times) - min(sampled.times))/(n.steps)
   
   # For storing information, nsteps+1 because we're starting at t=0
@@ -39,23 +43,30 @@ sampleLKtrajectory <- function(H0,P0,alpha1,alpha2,beta1,beta2,sampled.times,n.s
 # }
 
 logLikelihoodLK <- function(data,
-                            log_H0,
-                            log_P0,
+                            H0,
+                            P0,
                             alpha1,
                             alpha2,
                             beta1,
                             beta2,
-                            log_sigma1,
-                            log_sigma2,
-                            n.steps) {
+                            sigma1,
+                            sigma2,
+                            n.steps,
+                            log.scale=FALSE) {
   # recover()
   
   # un-log parameters
-  # We have them input on the log scale so optimization is unbounded
-  H0 <- exp(log_H0)
-  P0 <- exp(log_P0)
-  sigma1 <- exp(log_sigma1)
-  sigma2 <- exp(log_sigma2)
+  # We may have them input on the log scale so optimization is unbounded
+  if ( log.scale ) {
+    H0 <- exp(H0)
+    P0 <- exp(P0)
+    alpha1 <- exp(alpha1)
+    alpha2 <- exp(alpha2)
+    beta1 <- exp(beta1)
+    beta2 <- exp(beta2)
+    sigma1 <- exp(sigma1)
+    sigma2 <- exp(sigma2)
+  }
   
   # Need to know what we think the pop sizes were at the times we sampled
   path <- sampleLKtrajectory(H0=H0,P0=P0,alpha1=alpha1,alpha2=alpha2,beta1=beta1,beta2=beta2,sampled.times=data$time,n.steps=n.steps)
@@ -67,9 +78,9 @@ logLikelihoodLK <- function(data,
   return(lnL)
   
 }
-                          
+
 fitLotkaVolteraMaximumLikelihood <- function(data,...) {
-  recover()
+  # recover()
   
   # Make sure we have recognizable names in data
   if ( !any(grepl("time",names(data))) ) {
@@ -101,11 +112,11 @@ fitLotkaVolteraMaximumLikelihood <- function(data,...) {
   least_squares_1 <- lm(dH_over_H ~ data$pred[2:(dim(data)[1]-1)])
   least_squares_2 <- lm(dP_over_P ~ data$prey[2:(dim(data)[1]-1)])
   
-  alpha1_start <- as.numeric(least_squares_1$coefficients[1]) # we wrap these with as.numeric to get rid of obnoxious names
-  alpha2_start <- as.numeric(-least_squares_2$coefficients[1]) # The regression estimate assumes we are adding all the parameters, but this is subracted, so we take the negative
+  log_alpha1_start <- log(as.numeric(least_squares_1$coefficients[1])) # we wrap these with as.numeric to get rid of obnoxious names
+  log_alpha2_start <- log(as.numeric(-least_squares_2$coefficients[1])) # The regression estimate assumes we are adding all the parameters, but this is subracted, so we take the negative
   
-  beta1_start <- as.numeric(-least_squares_1$coefficients[2]) # The regression estimate assumes we are adding all the parameters, but this is subracted, so we take the negative
-  beta2_start <- as.numeric(least_squares_2$coefficients[2])
+  log_beta1_start <- log(as.numeric(-least_squares_1$coefficients[2])) # The regression estimate assumes we are adding all the parameters, but this is subracted, so we take the negative
+  log_beta2_start <- log(as.numeric(least_squares_2$coefficients[2]))
   
   # recover()
   
@@ -124,17 +135,20 @@ fitLotkaVolteraMaximumLikelihood <- function(data,...) {
   
   # Find area near peak for starting sizes and errors, conditioning on approximate Lotka-Voltera parameters
   # If we don't do this, we can easily get lost in crazy parameters (optimization is unstable!)
-  # A imore principled approach is to start optimization many times in many places (parameter combinations), but this is too slow for a 2 hour lab, given the time to optimize
+  # A more principled approach is to start optimization many times in many places (parameter combinations), but this is too slow for a 2 hour lab, given the time to optimize
   fnLKInitAndVar <- function(par) {
+    # We're assigning these variables here for clarity
+    # Optimization would be faster if we just plugged these directly into the log-likelihood function where they belong
+    # But it's easy to make mistakes there, and this is easier to read (and it all takes a matter of a minute anyways, what's the rush?)
     H0 <- par[1]
     P0 <- par[2]
-    alpha1 <- alpha1_start
-    alpha2 <- alpha2_start
-    beta1 <- beta1_start
-    beta2 <- beta2_start
+    alpha1 <- log_alpha1_start
+    alpha2 <- log_alpha2_start
+    beta1 <- log_beta1_start
+    beta2 <- log_beta2_start
     sigma1 <- par[3]
     sigma2 <- par[4]
-    -logLikelihoodLK(data,H0,P0,alpha1,alpha2,beta1,beta2,sigma1,sigma2,n.steps=n_steps_initial)
+    -logLikelihoodLK(data,H0=H0,P0=P0,alpha1=alpha1,alpha2=alpha2,beta1=beta1,beta2=beta2,sigma1=sigma1,sigma2=sigma2,n.steps=n_steps_initial,log.scale=TRUE)
   }
   
   opts <- optim(c(log(data$pred[1]),log(data$prey[1]),log(0.3),log(0.3)),fnLKInitAndVar,method="BFGS")
@@ -148,25 +162,22 @@ fitLotkaVolteraMaximumLikelihood <- function(data,...) {
     beta2 <- par[6]
     sigma1 <- par[7]
     sigma2 <- par[8]
-    -logLikelihoodLK(data,H0,P0,alpha1,alpha2,beta1,beta2,sigma1,sigma2,n.steps=n_steps_final)
+    -logLikelihoodLK(data,H0=H0,P0=P0,alpha1=alpha1,alpha2=alpha2,beta1=beta1,beta2=beta2,sigma1=sigma1,sigma2=sigma2,n.steps=n_steps_final,log.scale=TRUE)
   }
-  opt_ml <- optim(c(opts$par[1:2],alpha1_start,alpha2_start,beta1_start,beta2_start,opts$par[3:4]),fnLKforOptimML,method="BFGS",hessian=TRUE)
   
-  ml_par <- opt_ml$par
-  ml_par[c(1:2,7:8)] <- exp(ml_par[c(1:2,7:8)]) # move off log-scale
+  cat("Fitting model, please be patient!\n")
+  opt_ml <- optim(c(opts$par[1:2],log_alpha1_start,log_alpha2_start,log_beta1_start,log_beta2_start,opts$par[3:4]),fnLKforOptimML,method="BFGS",hessian=TRUE)
+  
+  ml_par <- exp(opt_ml$par) # move off log-scale
   names(ml_par) <- c("H0","P0","alpha1","alpha2","beta1","beta2","sigma1","sigma2")
   
   # recover()
   
-  # Compute confidence intervals
+  # Compute confidence intervals (keeping in mind we worked on log-scale for all optimization)
   asymptotic_sd <- sqrt(1/diag(opt_ml$hessian))
-  asymptotic_025 <- numeric(8)
-  asymptotic_025[c(1:2,7:8)] <- qlnorm(0.025,opt_ml$par[c(1:2,7:8)],asymptotic_sd[c(1:2,7:8)])
-  asymptotic_025[c(3:6)] <- qnorm(0.025,opt_ml$par[c(3:6)],asymptotic_sd[3:6])
-  asymptotic_975 <- numeric(8)
-  asymptotic_975[c(1:2,7:8)] <- qlnorm(0.975,opt_ml$par[c(1:2,7:8)],asymptotic_sd[c(1:2,7:8)])
-  asymptotic_975[c(3:6)] <- qnorm(0.975,opt_ml$par[c(3:6)],asymptotic_sd[3:6])
-  
+  asymptotic_025 <- qlnorm(0.025,opt_ml$par,asymptotic_sd)
+  asymptotic_975 <- qlnorm(0.975,opt_ml$par,asymptotic_sd)
+
   asymptotic_ci <- cbind(asymptotic_025,asymptotic_975)
   colnames(asymptotic_ci) <- c("2.5%","97.5%")
   rownames(asymptotic_ci) <- c("H0","P0","alpha1","alpha2","beta1","beta2","sigma1","sigma2")
@@ -190,7 +201,17 @@ assessLKModelFit <- function(data,ml.parameters,n.sim=100,...) {
   # recover()
   
   # Useful things
-  n_time_points <- length(data$times)
+  n_time_points <- length(data$time)
+  
+  # Pick a time step size
+  # This default will work reasonably well for data with two peaks
+  # We want about 4000-5000 steps
+  total_time <- max(data$time) - min(data$time)
+  
+  # For final optimization, smaller steps
+  steps_per_interval <- floor(5000/total_time)
+  n_steps <- total_time*steps_per_interval
+  
   
   # Simulate trajectories from model
   pred_sim <- matrix(NA,nrow=n_time_points,ncol=n.sim)
@@ -198,7 +219,7 @@ assessLKModelFit <- function(data,ml.parameters,n.sim=100,...) {
   pb <- txtProgressBar(min = 0, max = n.sim, style = 3) # report progress
   for (i in 1:n.sim) {
     # Simulate true trajectory
-    sim_traj <- sampleLKtrajectory(H0=ml.parameters[1],P0=ml.parameters[2],alpha1=ml.parameters[3],alpha2=ml.parameters[4],beta1=ml.parameters[5],beta2=ml.parameters[6],t.sim=max(data$times),sampled.times=data$times,h=1e-3)
+    sim_traj <- sampleLKtrajectory(H0=ml.parameters[1],P0=ml.parameters[2],alpha1=ml.parameters[3],alpha2=ml.parameters[4],beta1=ml.parameters[5],beta2=ml.parameters[6],sampled.times=data$time,n.steps=n_steps)
     # add measurement error
     prey_sim[,i] <- rlnorm(n_time_points,log(sim_traj$Ht),ml.parameters[7])
     pred_sim[,i] <- rlnorm(n_time_points,log(sim_traj$Pt),ml.parameters[8])
@@ -211,13 +232,11 @@ assessLKModelFit <- function(data,ml.parameters,n.sim=100,...) {
   # plot_max <- max(c(max(prey_sim),max(pred_sim))) # since there's measurement error, it's possible that there's a super-high predator pop size
   
   par(mfrow=c(2,1),mai=c(0.8,0.8,0.2,0.2),xpd=TRUE)
-  matplot(x=data$times,prey_sim,col=prey_color,type="l",lty=1,xlab="time",ylab="prey pop size")
-  lines(data$times,data$prey,lwd=3)
+  matplot(x=data$time,prey_sim,col=prey_color,type="l",lty=1,xlab="time",ylab="prey pop size")
+  lines(data$time,data$prey,lwd=3)
 
-  matplot(x=data$times,pred_sim,col=pred_color,type="l",lty=1,xlab="time",ylab="predator pop size")
-  lines(data$times,data$pred,lwd=3)
+  matplot(x=data$time,pred_sim,col=pred_color,type="l",lty=1,xlab="time",ylab="predator pop size")
+  lines(data$time,data$pred,lwd=3)
   par(mfrow=c(1,1))
   
 }
-
-AGD <- function(fn,init,)
