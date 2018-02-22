@@ -182,7 +182,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   pred_birth_indices <- (1+sum(n.parameters.in.functions[1:2])):(0+sum(n.parameters.in.functions[1:3]))
   pred_death_indices <- (1+sum(n.parameters.in.functions[1:3])):(0+sum(n.parameters.in.functions[1:4]))
   
-  recover()
+  # recover()
   
   fitInitWithDerivs <- function(par) {
     # Get off log scale
@@ -386,7 +386,14 @@ compareModels <- function(fitted.models.list) {
 
 
 
-assessGeneralizedLKModelFit <- function(data,LKmodel,fitted.model,n.sim=100,...) {
+visualizeGeneralizedLKModelFit <- function(data,
+                                           preyBirthFxn,
+                                           preyDeathFxn,
+                                           predBirthFxn,
+                                           predDeathFxn,
+                                           fitted.model,
+                                           n.sim=100,
+                                           ...) {
   if ( hasArg(pred.color) ) {
     pred_color <- list(...)$pred.color
   } else {
@@ -413,12 +420,18 @@ assessGeneralizedLKModelFit <- function(data,LKmodel,fitted.model,n.sim=100,...)
   n_steps <- total_time*steps_per_interval
   
   # Get parameters in a form we can use
-  is_theta <- grepl("theta",names(fitted.model$maximum.likelihood.parameter.estimates))
+  is_prey_birth <- grepl("prey.birth.parameters",names(fitted.model$maximum.likelihood.parameter.estimates))
+  is_prey_death <- grepl("prey.death.parameters",names(fitted.model$maximum.likelihood.parameter.estimates))
+  is_pred_birth <- grepl("pred.birth.parameters",names(fitted.model$maximum.likelihood.parameter.estimates))
+  is_pred_death <- grepl("pred.death.parameters",names(fitted.model$maximum.likelihood.parameter.estimates))
   is_prey_init <- grepl("prey.initial.size",names(fitted.model$maximum.likelihood.parameter.estimates))
   is_pred_init <- grepl("pred.initial.size",names(fitted.model$maximum.likelihood.parameter.estimates))
   is_sigma1 <- grepl("sigma1",names(fitted.model$maximum.likelihood.parameter.estimates))
   is_sigma2 <- grepl("sigma2",names(fitted.model$maximum.likelihood.parameter.estimates))
-  fitted_theta <- fitted.model$maximum.likelihood.parameter.estimates[is_theta]
+  fitted_prey_birth <- fitted.model$maximum.likelihood.parameter.estimates[is_prey_birth]
+  fitted_prey_death <- fitted.model$maximum.likelihood.parameter.estimates[is_prey_death]
+  fitted_pred_birth <- fitted.model$maximum.likelihood.parameter.estimates[is_pred_birth]
+  fitted_pred_death <- fitted.model$maximum.likelihood.parameter.estimates[is_pred_death]
   fitted_prey_init <- fitted.model$maximum.likelihood.parameter.estimates[is_prey_init]
   fitted_pred_init <- fitted.model$maximum.likelihood.parameter.estimates[is_pred_init]
   fitted_sigma1 <- fitted.model$maximum.likelihood.parameter.estimates[is_sigma1]
@@ -430,8 +443,18 @@ assessGeneralizedLKModelFit <- function(data,LKmodel,fitted.model,n.sim=100,...)
   pb <- txtProgressBar(min = 0, max = n.sim, style = 3) # report progress
   for (i in 1:n.sim) {
     # Simulate true trajectory
-    sim_traj <- sampleGeneralizedLKTrajectory(prey.initial.size=fitted_prey_init,pred.initial.size=fitted_pred_init,theta=fitted_theta,LKmodel=LKmodel,sampled.times=data$time,n.steps=n_steps)
-    
+    sim_traj <- sampleGeneralizedLKTrajectory(prey.initial.size=fitted_prey_init,
+                                              pred.initial.size=fitted_pred_init,
+                                              preyBirthFxn=preyBirthFxn,
+                                              preyDeathFxn=preyDeathFxn,
+                                              predBirthFxn=predBirthFxn,
+                                              predDeathFxn=predDeathFxn,
+                                              prey.birth.parameters=fitted_prey_birth,
+                                              prey.death.parameters=fitted_prey_death,
+                                              pred.birth.parameters=fitted_pred_birth,
+                                              pred.death.parameters=fitted_pred_death,
+                                              sampled.times=data$time,
+                                              n.steps=n_steps)
     # add measurement error
     prey_sim[,i] <- rlnorm(n_time_points,log(sim_traj$prey_trajectory),fitted_sigma1)
     pred_sim[,i] <- rlnorm(n_time_points,log(sim_traj$pred_trajectory),fitted_sigma2)
@@ -458,6 +481,7 @@ assertAllFunctionsPassAllTests <- function(preyBirthFxn,
                                            predBirthFxn,
                                            predDeathFxn,
                                            n.parameters.in.functions) {  
+  # recover()
   # Make sure provided functions are functions
   if ( !class(preyBirthFxn) == "function" ) {
     stop("Argument preyBirthFxn should be the name of a function (and not in quotes).")
@@ -473,59 +497,59 @@ assertAllFunctionsPassAllTests <- function(preyBirthFxn,
   }
   
   # Make sure provided functions do not need more than n.parameters.in.functions[i] parameters
-  if ( is.na(preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1]))) ) {
+  if ( is.na(preyBirthFxn(2,2,rep(2,n.parameters.in.functions[1]))) ) {
     stop("Error with preyBirthFxn. Is n.parameters.in.functions[1] the number of input parameters to this function?")
   }
-  if ( is.na(preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2]))) ) {
+  if ( is.na(preyDeathFxn(2,2,rep(2,n.parameters.in.functions[2]))) ) {
     stop("Error with preyDeathFxn. Is n.parameters.in.functions[2] the number of input parameters to this function?")
   }
-  if ( is.na(predBirthFxn(1,1,rep(1,n.parameters.in.functions[3]))) ) {
+  if ( is.na(predBirthFxn(2,2,rep(2,n.parameters.in.functions[3]))) ) {
     stop("Error with predBirthFxn. Is n.parameters.in.functions[3] the number of input parameters to this function?")
   }
-  if ( is.na(predDeathFxn(1,1,rep(1,n.parameters.in.functions[4]))) ) {
+  if ( is.na(predDeathFxn(2,2,rep(2,n.parameters.in.functions[4]))) ) {
     stop("Error with predDeathFxn. Is n.parameters.in.functions[4] the number of input parameters to this function?")
   }
   
   # Try to make sure provided functions are function do not need fewer than n.parameters.in.functions[i] parameters
-  # If adding an extra input to the paramaters argument changes the value, it must need another input and n.param cannot be right here
-  if ( preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1])) != preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1]+1))) {
+  # If we have listed the right number of parameters, and we supply one fewer, the result should be an NA
+  if ( !is.na(preyBirthFxn(2,2,rep(2,n.parameters.in.functions[1]-1))) ) {
     stop("Error with preyBirthFxn. Is n.parameters.in.functions[1] the number of input parameters to this function?")
   }
-  if ( preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2])) != preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2]+1))) {
+  if ( !is.na(preyDeathFxn(2,2,rep(2,n.parameters.in.functions[2]-1))) ) {
     stop("Error with preyDeathFxn. Is n.parameters.in.functions[2] the number of input parameters to this function?")
   }
-  if ( predBirthFxn(1,1,rep(1,n.parameters.in.functions[3])) != predBirthFxn(1,1,rep(1,n.parameters.in.functions[3]+1))) {
+  if ( !is.na(predBirthFxn(2,2,rep(2,n.parameters.in.functions[3]-1))) ) {
     stop("Error with predBirthFxn. Is n.parameters.in.functions[3] the number of input parameters to this function?")
   }
-  if ( predDeathFxn(1,1,rep(1,n.parameters.in.functions[4])) != predDeathFxn(1,1,rep(1,n.parameters.in.functions[4]+1))) {
-    stop("Error with predDeathFxn. Is n.parameters.in.functions[4] the number of input parameters to this function?")
+  if ( !is.na(predDeathFxn(2,2,rep(2,n.parameters.in.functions[4]-1))) ) {
+  stop("Error with predDeathFxn. Is n.parameters.in.functions[4] the number of input parameters to this function?")
   }
-  
+
   # Make sure provided functions return a single numeric
-  if ( !is.numeric(preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1]))) || length(preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1]))) != 1 ) {
+  if ( !is.numeric(preyBirthFxn(2,2,rep(2,n.parameters.in.functions[1]))) || length(preyBirthFxn(2,2,rep(2,n.parameters.in.functions[1]))) != 1 ) {
     stop("Error with preyBirthFxn. Function should return a single numeric value.")
   }
-  if ( !is.numeric(preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2])))  || length(preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2]))) != 1 ) {
+  if ( !is.numeric(preyDeathFxn(2,2,rep(2,n.parameters.in.functions[2])))  || length(preyDeathFxn(2,2,rep(2,n.parameters.in.functions[2]))) != 1 ) {
     stop("Error with preyDeathFxn. Function should return a single numeric value.")
   }
-  if ( !is.numeric(predBirthFxn(1,1,rep(1,n.parameters.in.functions[3])))  || length(predBirthFxn(1,1,rep(1,n.parameters.in.functions[3]))) != 1 ) {
+  if ( !is.numeric(predBirthFxn(2,2,rep(2,n.parameters.in.functions[3])))  || length(predBirthFxn(2,2,rep(2,n.parameters.in.functions[3]))) != 1 ) {
     stop("Error with predBirthFxn. Function should return a single numeric value.")
   }
-  if ( !is.numeric(predDeathFxn(1,1,rep(1,n.parameters.in.functions[4])))  || length(predDeathFxn(1,1,rep(1,n.parameters.in.functions[4]))) != 1 ) {
+  if ( !is.numeric(predDeathFxn(2,2,rep(2,n.parameters.in.functions[4])))  || length(predDeathFxn(2,2,rep(2,n.parameters.in.functions[4]))) != 1 ) {
     stop("Error with predDeathFxn. Function should return a single numeric value.")
   }
   
   # Make sure functions take arguments with the correct names (this also catches errors that slip through the previous checks)
-  if ( class(try(preyBirthFxn(pred.size=1,prey.size=1,prey.birth.parameters=rep(1,n.parameters.in.functions[1])),silent=TRUE)) == "try-error" ) {
+  if ( class(try(preyBirthFxn(pred.size=1,prey.size=1,prey.birth.parameters=rep(2,n.parameters.in.functions[1])),silent=TRUE)) == "try-error" ) {
     stop("Argument preyBirthFxn. should be a function that takes 2 + n.parameters.in.functions[1] arguments.The arguments must be named pred.size, prey.size, and prey.birth.parameters.")
   }
-  if ( class(try(preyDeathFxn(pred.size=1,prey.size=1,prey.death.parameters=rep(1,n.parameters.in.functions[2])),silent=TRUE)) == "try-error" ) {
+  if ( class(try(preyDeathFxn(pred.size=1,prey.size=1,prey.death.parameters=rep(2,n.parameters.in.functions[2])),silent=TRUE)) == "try-error" ) {
     stop("Argument preyDeathFxn should be a function that takes 2 + n.parameters.in.functions[2] arguments.The arguments must be named pred.size, prey.size, and prey.death.parameters.")
   }
-  if ( class(try(predBirthFxn(pred.size=1,prey.size=1,pred.birth.parameters=rep(1,n.parameters.in.functions[3])),silent=TRUE)) == "try-error" ) {
+  if ( class(try(predBirthFxn(pred.size=1,prey.size=1,pred.birth.parameters=rep(2,n.parameters.in.functions[3])),silent=TRUE)) == "try-error" ) {
     stop("Argument predBirthFxn should be a function that takes 2 + n.parameters.in.functions[3] arguments.The arguments must be named pred.size, prey.size, and pred.birth.parameters.")
   }
-  if ( class(try(predDeathFxn(pred.size=1,prey.size=1,pred.death.parameters=rep(1,n.parameters.in.functions[4])),silent=TRUE)) == "try-error" ) {
+  if ( class(try(predDeathFxn(pred.size=1,prey.size=1,pred.death.parameters=rep(2,n.parameters.in.functions[4])),silent=TRUE)) == "try-error" ) {
     stop("Argument predDeathFxn should be a function that takes 2 + n.parameters.in.functions[4] arguments.The arguments must be named pred.size, prey.size, and pred.death.parameters.")
   }
   

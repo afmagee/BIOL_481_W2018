@@ -20,34 +20,32 @@ preyDeathLK <- function(pred.size,prey.size,prey.death.parameters) {
 ## Different takes on prey death
 preyDeathIvlev <- function(pred.size,prey.size,prey.death.parameters) {
   # From Chapter 5, May (1976), also called a Holling Type II (Invertebrate) response
-  # 
-  return(prey.death.parameters[1]*(1 - exp(-prey.death.parameters[2]*pred.size)))
+  # This has Lotka-Voltera-like dynamics if the prey size is very large
+  return(prey.death.parameters[1]*(1 - exp(-prey.death.parameters[2]*prey.size)))
 }
 
-
-## Density-dependent population sizes
-predBirthDensityDependent <- function(pred.size,prey.size,pred.birth.parameters) {
+preyDeathWatt <- function(pred.size,prey.size,prey.death.parameters) {
   # From Chapter 5, May (1976), also called a Holling Type II (Invertebrate) response
+  # This is pretty different from Lotka-Voltera, unless the prey size is large and the predator size is small
+  return(prey.death.parameters[1]*(1 - exp(-prey.death.parameters[2]*prey.size*(pred.size^(1-prey.death.parameters[3])))))
+}
+
+## Density-dependent population birth rates
+predBirthDensityDependent1 <- function(pred.size,prey.size,pred.birth.parameters) {
+  # From Chapter 5, May (1976)
+  # The predators have a growth rate all their own, but the carrying capacity depends on the prey population size
   return(pred.birth.parameters[1]*(1 - pred.birth.parameters[2]*pred.size/prey.size))
 }
 
-preyBirthDensityDependent <- function(pred.size,prey.size,prey.birth.parameters) {
-  return(prey.birth.parameters[1]*(1 - prey.size/prey.birth.parameters[2]))
+predBirthDensityDependent2 <- function(pred.size,prey.size,pred.birth.parameters) {
+  # This has Lotka-Voltera dynamics when predator population size is small
+  # Growth rate slows as population increases
+  return(prey.size*pred.birth.parameters[1]*(1 - pred.size/pred.birth.parameters[2]))
 }
 
-
-
-standardLK <- function(prey.size,pred.size,theta) {
-  # This is just the standard Lotka-Voltera machinary
-  # We label the parameters as follows:
-  #      theta[1] = birth rate of the prey 
-  #      theta[2] = death rate of the prey (depends on predator population size)
-  #      theta[3] = death rate of the predator 
-  #      theta[4] = birth rate of the predator (depends on prey population size)
-  prey_slope <- (theta[1] - theta[2]*pred.size)*prey.size
-  pred_slope <- (-theta[3] + theta[4]*prey.size)*pred.size
-  slope_vector <- c(prey_slope,pred_slope)
-  return(slope_vector)
+preyBirthDensityDependent <- function(pred.size,prey.size,prey.birth.parameters) {
+  # Growth rate slows as population increases
+  return(prey.birth.parameters[1]*(1 - prey.size/prey.birth.parameters[2]))
 }
 
 
@@ -92,15 +90,32 @@ fitGeneralizedLotkaVolteraMaximumLikelihood(lh.data,
                                             c(1,1,1,1))
 
 
-system.time({lh.iv <- 
+system.time({lh.dddd <- 
   fitGeneralizedLotkaVolteraMaximumLikelihood(lh.data,
-                                            preyBirthLK,
-                                            preyDeathIvlev,
-                                            predBirthLK,
+                                            preyBirthDensityDependent,
+                                            preyDeathLK,
+                                            predBirthDensityDependent2,
                                             predDeathLK,
-                                            c(1,2,1,1))
+                                            c(2,1,2,1))
 })
 
+mm.data <- read.csv("population_cycling/mink_muskrat.csv")
+
+system.time({mm.wapreddd <- 
+  fitGeneralizedLotkaVolteraMaximumLikelihood(mm.data,
+                                              preyBirthLK,
+                                              preyDeathWatt,
+                                              predBirthDensityDependent1,
+                                              predDeathLK,
+                                              c(1,3,2,1))
+})
+
+assessGeneralizedLKModelFit(mm.data,
+                            preyBirthLK,
+                            preyDeathIvlev,
+                            predBirthHolling,
+                            predDeathLK,
+                            mm.ivho)
 
 
 fitGeneralizedLotkaVolteraMaximumLikelihood(lh.data,
