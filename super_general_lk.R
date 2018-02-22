@@ -157,44 +157,11 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
     stop("data must be data frame with a column named prey")
   }
   
-  # Make sure provided LKmodel is a function
-  if ( !class(preyBirthFxn) == "function" ) {
-    stop("Argument preyBirthFxn should be the name of a function (and not in quotes).")
-  }
-  if ( !class(preyDeathFxn) == "function" ) {
-    stop("Argument preyDeathFxn should be the name of a function (and not in quotes).")
-  }
-  if ( !class(predBirthFxn) == "function" ) {
-    stop("Argument predBirthFxn should be the name of a function (and not in quotes).")
-  }
-  if ( !class(predDeathFxn) == "function" ) {
-    stop("Argument predDeathFxn should be the name of a function (and not in quotes).")
-  }
-  
-  # # Make sure provided LKmodel is a function with n.parameters.LKmodel parameters in theta and 2 additional parameters
-  # if ( any(is.na(LKmodel(1,1,rep(1,n.parameters.LKmodel)))) ) {
-  #   stop("Argument LKmodel should be a function that takes 2 + n.parameters.LKmodel arguments.\nThis example function has n.parameters.LKmodel = 2:
-  #        \tmyExampleFunction <- function(prey.size,pred.size,theta){
-  #        \t\tprey_slope <- exp(-theta[1]*prey.size)
-  #        \t\tpred_slope <- exp(-theta[2]*pred.size)
-  #        \t\treturn(c(prey_slope,pred_slope))
-  #        \t}")
-  # }
-  # 
-  # # Make sure KLmodel takes arguments with the correct names (this also catches errors that slip through the previous checks)
-  # if ( class(try(LKmodel(pred.size=1,prey.size=1,theta=rep(1,n.parameters.LKmodel)),silent=TRUE)) == "try-error" ) {
-  #   stop("Argument LKmodel should be a function that takes 2 + n.parameters.LKmodel arguments.\nThe arguments must be named pred.size, prey.size, and theta. For example:
-  #        \tmyExampleFunction <- function(prey.size,pred.size,theta){
-  #        \t\tprey_slope <- exp(-theta[1]*prey.size)
-  #        \t\tpred_slope <- exp(-theta[2]*pred.size)
-  #        \t\treturn(c(prey_slope,pred_slope))
-  #        \t}")
-  # }
-  # 
-  # # Make sure provided LKmodel returns a numeric vector of length 2
-  # if ( length(LKmodel(pred.size=1,prey.size=1,theta=rep(1,n.parameters.LKmodel))) != 2 || class(LKmodel(pred.size=1,prey.size=1,theta=rep(1,n.parameters.LKmodel))) != "numeric" ) {
-  #   stop("Argument LKmodel should be a function that returns a numeric vector of size 2")
-  # }
+  # There are many things we have to check for the input functions, so we outsource it to a different function
+  # The error-checking function will fail loudly and stop everything from proceeding
+  assertAllFunctionsPassAllTests(preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn,n.parameters.in.functions)
+
+
   
   ## First-pass estimation with derivatives, following Howard
   
@@ -215,7 +182,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   pred_birth_indices <- (1+sum(n.parameters.in.functions[1:2])):(0+sum(n.parameters.in.functions[1:3]))
   pred_death_indices <- (1+sum(n.parameters.in.functions[1:3])):(0+sum(n.parameters.in.functions[1:4]))
   
-  # recover()
+  recover()
   
   fitInitWithDerivs <- function(par) {
     # Get off log scale
@@ -260,12 +227,24 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   init_opt_attempts <- vector("list",init_attempt_n_tries_deterministic+init_attempt_n_tries_random)
   init_opt_scores <- numeric(init_attempt_n_tries_deterministic+init_attempt_n_tries_random)
   for (i in 1:init_attempt_n_tries_deterministic) {
-    init_opt_attempts[[i]] <- optim(rep(log(i/10),sum(n.parameters.in.functions)),fitInitWithDerivs)
-    init_opt_scores[i] <- init_opt_attempts[[i]]$value
+    init_opt_attempts[[i]] <- try(optim(rep(log(i/10),sum(n.parameters.in.functions)),fitInitWithDerivs),silent=TRUE)
+    if ( class(init_opt_attempts[[i]]) == "try-error" ) {
+      init_opt_scores[i] <- Inf
+    } else {
+      init_opt_scores[i] <- init_opt_attempts[[i]]$value
+    }
   }
   for (i in (1:init_attempt_n_tries_random)+init_attempt_n_tries_deterministic) {
-    init_opt_attempts[[i]] <- optim(log(runif(sum(n.parameters.in.functions),0.1,1.1)),fitInitWithDerivs)
-    init_opt_scores[i] <- init_opt_attempts[[i]]$value
+    init_opt_attempts[[i]] <- try(optim(log(runif(sum(n.parameters.in.functions),0.1,1.1)),fitInitWithDerivs),silent=TRUE)
+    if ( class(init_opt_attempts[[i]]) == "try-error" ) {
+      init_opt_scores[i] <- Inf
+    } else {
+      init_opt_scores[i] <- init_opt_attempts[[i]]$value
+    }
+  }
+  
+  if ( all(is.infinite(init_opt_scores)) ) {
+    stop("Please provide starting values for optimization")
   }
   
   # choose the best starting attempt
@@ -344,7 +323,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   cat("Fitting model, please be patient!\n")
   opt_ml <- optim(c(opts$par,init_opts$par),fnLKforOptimML,method="BFGS",hessian=TRUE)
   
-  recover()
+  # recover()
   
   ml_par <- exp(opt_ml$par) # move off log-scale
   names(ml_par) <- c("prey.initial.size",
@@ -471,5 +450,83 @@ assessGeneralizedLKModelFit <- function(data,LKmodel,fitted.model,n.sim=100,...)
   matplot(x=data$time,pred_sim,col=pred_color,type="l",lty=1,xlab="time",ylab="predator pop size")
   lines(data$time,data$pred,lwd=3)
   par(mfrow=c(1,1))
+  
+}
+
+assertAllFunctionsPassAllTests <- function(preyBirthFxn,
+                                           preyDeathFxn,
+                                           predBirthFxn,
+                                           predDeathFxn,
+                                           n.parameters.in.functions) {  
+  # Make sure provided functions are functions
+  if ( !class(preyBirthFxn) == "function" ) {
+    stop("Argument preyBirthFxn should be the name of a function (and not in quotes).")
+  }
+  if ( !class(preyDeathFxn) == "function" ) {
+    stop("Argument preyDeathFxn should be the name of a function (and not in quotes).")
+  }
+  if ( !class(predBirthFxn) == "function" ) {
+    stop("Argument predBirthFxn should be the name of a function (and not in quotes).")
+  }
+  if ( !class(predDeathFxn) == "function" ) {
+    stop("Argument predDeathFxn should be the name of a function (and not in quotes).")
+  }
+  
+  # Make sure provided functions do not need more than n.parameters.in.functions[i] parameters
+  if ( is.na(preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1]))) ) {
+    stop("Error with preyBirthFxn. Is n.parameters.in.functions[1] the number of input parameters to this function?")
+  }
+  if ( is.na(preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2]))) ) {
+    stop("Error with preyDeathFxn. Is n.parameters.in.functions[2] the number of input parameters to this function?")
+  }
+  if ( is.na(predBirthFxn(1,1,rep(1,n.parameters.in.functions[3]))) ) {
+    stop("Error with predBirthFxn. Is n.parameters.in.functions[3] the number of input parameters to this function?")
+  }
+  if ( is.na(predDeathFxn(1,1,rep(1,n.parameters.in.functions[4]))) ) {
+    stop("Error with predDeathFxn. Is n.parameters.in.functions[4] the number of input parameters to this function?")
+  }
+  
+  # Try to make sure provided functions are function do not need fewer than n.parameters.in.functions[i] parameters
+  # If adding an extra input to the paramaters argument changes the value, it must need another input and n.param cannot be right here
+  if ( preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1])) != preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1]+1))) {
+    stop("Error with preyBirthFxn. Is n.parameters.in.functions[1] the number of input parameters to this function?")
+  }
+  if ( preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2])) != preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2]+1))) {
+    stop("Error with preyDeathFxn. Is n.parameters.in.functions[2] the number of input parameters to this function?")
+  }
+  if ( predBirthFxn(1,1,rep(1,n.parameters.in.functions[3])) != predBirthFxn(1,1,rep(1,n.parameters.in.functions[3]+1))) {
+    stop("Error with predBirthFxn. Is n.parameters.in.functions[3] the number of input parameters to this function?")
+  }
+  if ( predDeathFxn(1,1,rep(1,n.parameters.in.functions[4])) != predDeathFxn(1,1,rep(1,n.parameters.in.functions[4]+1))) {
+    stop("Error with predDeathFxn. Is n.parameters.in.functions[4] the number of input parameters to this function?")
+  }
+  
+  # Make sure provided functions return a single numeric
+  if ( !is.numeric(preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1]))) || length(preyBirthFxn(1,1,rep(1,n.parameters.in.functions[1]))) != 1 ) {
+    stop("Error with preyBirthFxn. Function should return a single numeric value.")
+  }
+  if ( !is.numeric(preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2])))  || length(preyDeathFxn(1,1,rep(1,n.parameters.in.functions[2]))) != 1 ) {
+    stop("Error with preyDeathFxn. Function should return a single numeric value.")
+  }
+  if ( !is.numeric(predBirthFxn(1,1,rep(1,n.parameters.in.functions[3])))  || length(predBirthFxn(1,1,rep(1,n.parameters.in.functions[3]))) != 1 ) {
+    stop("Error with predBirthFxn. Function should return a single numeric value.")
+  }
+  if ( !is.numeric(predDeathFxn(1,1,rep(1,n.parameters.in.functions[4])))  || length(predDeathFxn(1,1,rep(1,n.parameters.in.functions[4]))) != 1 ) {
+    stop("Error with predDeathFxn. Function should return a single numeric value.")
+  }
+  
+  # Make sure functions take arguments with the correct names (this also catches errors that slip through the previous checks)
+  if ( class(try(preyBirthFxn(pred.size=1,prey.size=1,prey.birth.parameters=rep(1,n.parameters.in.functions[1])),silent=TRUE)) == "try-error" ) {
+    stop("Argument preyBirthFxn. should be a function that takes 2 + n.parameters.in.functions[1] arguments.The arguments must be named pred.size, prey.size, and prey.birth.parameters.")
+  }
+  if ( class(try(preyDeathFxn(pred.size=1,prey.size=1,prey.death.parameters=rep(1,n.parameters.in.functions[2])),silent=TRUE)) == "try-error" ) {
+    stop("Argument preyDeathFxn should be a function that takes 2 + n.parameters.in.functions[2] arguments.The arguments must be named pred.size, prey.size, and prey.death.parameters.")
+  }
+  if ( class(try(predBirthFxn(pred.size=1,prey.size=1,pred.birth.parameters=rep(1,n.parameters.in.functions[3])),silent=TRUE)) == "try-error" ) {
+    stop("Argument predBirthFxn should be a function that takes 2 + n.parameters.in.functions[3] arguments.The arguments must be named pred.size, prey.size, and pred.birth.parameters.")
+  }
+  if ( class(try(predDeathFxn(pred.size=1,prey.size=1,pred.death.parameters=rep(1,n.parameters.in.functions[4])),silent=TRUE)) == "try-error" ) {
+    stop("Argument predDeathFxn should be a function that takes 2 + n.parameters.in.functions[4] arguments.The arguments must be named pred.size, prey.size, and pred.death.parameters.")
+  }
   
 }
