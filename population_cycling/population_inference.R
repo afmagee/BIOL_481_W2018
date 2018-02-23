@@ -1,141 +1,24 @@
-getPreySlope <- function(prey.size,pred.size,preyBirthFxn,preyDeathFxn,prey.birth.parameters,prey.death.parameters) {
-  per_capita_slope <- preyBirthFxn(pred.size=pred.size,prey.size=prey.size,prey.birth.parameters=prey.birth.parameters) - 
-    preyDeathFxn(pred.size=pred.size,prey.size=prey.size,prey.death.parameters=prey.death.parameters)
-  return(per_capita_slope * prey.size)
-}
-
-getPredSlope <- function(prey.size,pred.size,predBirthFxn,predDeathFxn,pred.birth.parameters,pred.death.parameters) {
-  per_capita_slope <- predBirthFxn(pred.size=pred.size,prey.size=prey.size,pred.birth.parameters=pred.birth.parameters) - 
-    predDeathFxn(pred.size=pred.size,prey.size=prey.size,pred.death.parameters=pred.death.parameters)
-  return(per_capita_slope * pred.size)
-}
-
-# Here we simulate a trajectory for the predator and prey population sizes
-# theta is a vector containing parameters
-# LKmodel is a function that takes in theta, and the current predator and prey pop sizes, and returns a vector c(dPred/dt,dPrey/dt)
-# In other words, this function can plot the trajectory for any (deterministic) model of predator and prey population cycling that depends only on predator and prey population sizes
-sampleGeneralizedLKTrajectory <- function(prey.initial.size,
-                                          pred.initial.size,
-                                          preyBirthFxn,
-                                          preyDeathFxn,
-                                          predBirthFxn,
-                                          predDeathFxn,
-                                          prey.birth.parameters,
-                                          prey.death.parameters,
-                                          pred.birth.parameters,
-                                          pred.death.parameters,
-                                          sampled.times,
-                                          n.steps) {
-  # recover()
-  
-  # Calculate time slice size
-  # We don't solve any differential equations here
-  # We just take tiny steps along the population trajectory given the slope at an instant
-  # If the step size is sufficiently small, this is a passable approximation of more complicated techniques
-  h <- (max(sampled.times) - min(sampled.times))/(n.steps)
-  
-  # For storing information, nsteps+1 because we're starting at t=0
-  prey_trajectory <- numeric(n.steps+1)
-  pred_trajectory <- numeric(n.steps+1)
-  
-  # Given initial sizes
-  prey_trajectory[1] <- prey.initial.size
-  pred_trajectory[1] <- pred.initial.size
-  
-  # A step at a time, simulate next step
-  for (t in 1:n.steps) {
-    prey_slope <- getPreySlope(prey.size=prey_trajectory[t],
-                               pred.size=pred_trajectory[t],
-                               preyBirthFxn=preyBirthFxn,
-                               preyDeathFxn=preyDeathFxn,
-                               prey.birth.parameters=prey.birth.parameters,
-                               prey.death.parameters=prey.death.parameters)
-    pred_slope <- getPredSlope(prey.size=prey_trajectory[t],
-                               pred.size=pred_trajectory[t],
-                               predBirthFxn=predBirthFxn,
-                               predDeathFxn=predDeathFxn,
-                               pred.birth.parameters=pred.birth.parameters,
-                               pred.death.parameters=pred.death.parameters)
-    prey_trajectory[t+1] <- prey_trajectory[t]+prey_slope*h
-    pred_trajectory[t+1] <- pred_trajectory[t]+pred_slope*h
-  }
-  
-  # Filter to only the ones we needed
-  keep <- (min(sampled.times)+(0:n.steps)*h) %in% sampled.times
-  
-  if ( sum(keep) != length(sampled.times) ) {
-    stop("Error in sampleGeneralizedLKTrajectory, simulated times not matching real times. Are times evenly spaced?")
-  }
-  
-  prey_trajectory <- prey_trajectory[keep]
-  pred_trajectory <- pred_trajectory[keep]
-  
-  return(data.frame(prey_trajectory=prey_trajectory,pred_trajectory=pred_trajectory))
-  
-}
-
-# Calculates the likelihood for a generalized class of Lotka-Voltera models
-# Takes the following argumens:
+# Plots the observed predator and prey population trajectories
+# Takes the following arguments:
 #      data: the data, as a dataframe with columns named time(s), pred(ator), and prey
-#      prey.initial.size: the population size for the prey at the first time point
-#      pred.initial.size: the population size for the predator at the first time point
-#      theta: the parameters for the model of population size change
-#      data: a function that takes in theta, and the current predator and prey pop sizes, and returns a vector c(dPred/dt,dPrey/dt)
-#      sigma1: the value of sigma for the (lognormal) error of prey measurements
-#      sigma2: the value of sigma for the (lognormal) error of predator measurements
-#      parameters.are.log.scale: are the parameter values given on the log scale? (They will be for optimization)
-logLikelihoodGeneralizedLK <- function(data,
-                                       prey.initial.size,
-                                       pred.initial.size,
-                                       preyBirthFxn,
-                                       preyDeathFxn,
-                                       predBirthFxn,
-                                       predDeathFxn,
-                                       prey.birth.parameters,
-                                       prey.death.parameters,
-                                       pred.birth.parameters,
-                                       pred.death.parameters,
-                                       sigma1,
-                                       sigma2,
-                                       n.steps,
-                                       parameters.are.log.scale=FALSE) {
-  # recover()
+plotPredatorPrey <- function(data) {
+  par(mfrow=c(2,1),mai=c(0.8,0.8,0.2,0.2),xpd=TRUE)
+  plot(data$time,data$prey,type="l",lwd=2,xlab="time",ylab="prey pop size")
   
-  # un-log parameters
-  # We may have them input on the log scale so optimization is unbounded
-  if ( parameters.are.log.scale ) {
-    prey.initial.size <- exp(prey.initial.size)
-    pred.initial.size <- exp(pred.initial.size)
-    prey.birth.parameters <- exp(prey.birth.parameters)
-    prey.death.parameters <- exp(prey.death.parameters)
-    pred.birth.parameters <- exp(pred.birth.parameters)
-    pred.death.parameters <- exp(pred.death.parameters)
-    sigma1 <- exp(sigma1)
-    sigma2 <- exp(sigma2)
-  }
-  
-  # Need to know what we think the pop sizes were at the times we sampled
-  path <- sampleGeneralizedLKTrajectory(prey.initial.size=prey.initial.size,
-                                        pred.initial.size=pred.initial.size,
-                                        preyBirthFxn=preyBirthFxn,
-                                        preyDeathFxn=preyDeathFxn,
-                                        predBirthFxn=predBirthFxn,
-                                        predDeathFxn=predDeathFxn,
-                                        prey.birth.parameters=prey.birth.parameters,
-                                        prey.death.parameters=prey.death.parameters,
-                                        pred.birth.parameters=pred.birth.parameters,
-                                        pred.death.parameters=pred.death.parameters,
-                                        sampled.times=data$time,
-                                        n.steps=n.steps)
-
-  # Now it's just a measurement model
-  lnL <- sum(dlnorm(data$prey,log(path$prey_trajectory),sigma1,log=TRUE)) + # measurements of prey pop sizes
-    sum(dlnorm(data$pred,log(path$pred_trajectory),sigma2,log=TRUE)) # measurements of pred pop sizes
-  
-  return(lnL)
-  
+  plot(data$time,data$pred,type="l",lwd=2,xlab="time",ylab="predator pop size")
+  par(mfrow=c(1,1))
 }
 
+# This function fits population models with maximum likelihood
+# Models are specified with 4 functions, 1 each to describe birth and death rates of predators and prey
+# These functions take as input the predator and prey population size and a vector of at least one other parameter
+# Takes the following arguments:
+#      data: the data, as a dataframe with columns named time(s), pred(ator), and prey
+#      preyBirthFxn: a function that returns the prey birth rate for given prey and predator population sizes and at least one additional parameter
+#      preyDeathFxn: a function that returns the prey death rate for given prey and predator population sizes and at least one additional parameter
+#      predBirthFxn: a function that returns the predator birth rate for given prey and predator population sizes and at least one additional parameter
+#      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
+#      n.parameters.in.functions: a vector of length 4, the number of parameters for the functions in order preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn
 fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
                                                         preyBirthFxn,
                                                         preyDeathFxn,
@@ -161,8 +44,6 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   # The error-checking function will fail loudly and stop everything from proceeding
   assertAllFunctionsPassAllTests(preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn,n.parameters.in.functions)
 
-
-  
   ## First-pass estimation with derivatives, following Howard
   
   # The problem here is that starting with crazy optimization values can take forever and then yield crazy results
@@ -334,7 +215,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
                      paste0("prey.death.parameters",1:n.parameters.in.functions[2]),
                      paste0("pred.birth.parameters",1:n.parameters.in.functions[3]),
                      paste0("pred.death.parameters",1:n.parameters.in.functions[4]))
-
+  
   # Compute confidence intervals (keeping in mind we worked on log-scale for all optimization)
   asymptotic_sd <- sqrt(1/diag(opt_ml$hessian))
   asymptotic_025 <- qlnorm(0.025,opt_ml$par,asymptotic_sd)
@@ -348,6 +229,167 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   
 }
 
+# Calculates the likelihood for a generalized class of Lotka-Voltera models
+# Takes the following argumens:
+#      data: the data, as a dataframe with columns named time(s), pred(ator), and prey
+#      prey.initial.size: the population size for the prey at the first time point
+#      pred.initial.size: the population size for the predator at the first time point
+#      preyBirthFxn: a function that returns the prey birth rate for given prey and predator population sizes and at least one additional parameter
+#      preyDeathFxn: a function that returns the prey death rate for given prey and predator population sizes and at least one additional parameter
+#      predBirthFxn: a function that returns the predator birth rate for given prey and predator population sizes and at least one additional parameter
+#      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
+#      prey.birth.parameters: the parameters for the model of prey birth rate
+#      prey.death.parameters: the parameters for the model of prey death rate
+#      pred.birth.parameters: the parameters for the model of predator birth rate
+#      pred.death.parameters: the parameters for the model of predator death rate
+#      sigma1: the value of sigma for the (lognormal) error of prey measurements
+#      sigma2: the value of sigma for the (lognormal) error of predator measurements
+#      parameters.are.log.scale: are the parameter values given on the log scale? (They will be for optimization)
+logLikelihoodGeneralizedLK <- function(data,
+                                       prey.initial.size,
+                                       pred.initial.size,
+                                       preyBirthFxn,
+                                       preyDeathFxn,
+                                       predBirthFxn,
+                                       predDeathFxn,
+                                       prey.birth.parameters,
+                                       prey.death.parameters,
+                                       pred.birth.parameters,
+                                       pred.death.parameters,
+                                       sigma1,
+                                       sigma2,
+                                       n.steps,
+                                       parameters.are.log.scale=FALSE) {
+  # recover()
+  
+  # un-log parameters
+  # We may have them input on the log scale so optimization is unbounded
+  if ( parameters.are.log.scale ) {
+    prey.initial.size <- exp(prey.initial.size)
+    pred.initial.size <- exp(pred.initial.size)
+    prey.birth.parameters <- exp(prey.birth.parameters)
+    prey.death.parameters <- exp(prey.death.parameters)
+    pred.birth.parameters <- exp(pred.birth.parameters)
+    pred.death.parameters <- exp(pred.death.parameters)
+    sigma1 <- exp(sigma1)
+    sigma2 <- exp(sigma2)
+  }
+  
+  # Need to know what we think the pop sizes were at the times we sampled
+  path <- sampleGeneralizedLKTrajectory(prey.initial.size=prey.initial.size,
+                                        pred.initial.size=pred.initial.size,
+                                        preyBirthFxn=preyBirthFxn,
+                                        preyDeathFxn=preyDeathFxn,
+                                        predBirthFxn=predBirthFxn,
+                                        predDeathFxn=predDeathFxn,
+                                        prey.birth.parameters=prey.birth.parameters,
+                                        prey.death.parameters=prey.death.parameters,
+                                        pred.birth.parameters=pred.birth.parameters,
+                                        pred.death.parameters=pred.death.parameters,
+                                        sampled.times=data$time,
+                                        n.steps=n.steps)
+
+  # Now it's just a measurement model
+  lnL <- sum(dlnorm(data$prey,log(path$prey_trajectory),sigma1,log=TRUE)) + # measurements of prey pop sizes
+    sum(dlnorm(data$pred,log(path$pred_trajectory),sigma2,log=TRUE)) # measurements of pred pop sizes
+  
+  return(lnL)
+  
+}
+
+# Here we simulate a trajectory for the predator and prey population sizes using models for birth and death rates of predator and prey populations
+# In other words, this function can plot the trajectory for just about any (deterministic) model of predator and prey population cycling that depends only on predator and prey population sizes
+# Takes the following argumens:
+#      prey.initial.size: the population size for the prey at the first time point
+#      pred.initial.size: the population size for the predator at the first time point
+#      preyBirthFxn: a function that returns the prey birth rate for given prey and predator population sizes and at least one additional parameter
+#      preyDeathFxn: a function that returns the prey death rate for given prey and predator population sizes and at least one additional parameter
+#      predBirthFxn: a function that returns the predator birth rate for given prey and predator population sizes and at least one additional parameter
+#      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
+#      prey.birth.parameters: the parameters for the model of prey birth rate
+#      prey.death.parameters: the parameters for the model of prey death rate
+#      pred.birth.parameters: the parameters for the model of predator birth rate
+#      pred.death.parameters: the parameters for the model of predator death rate
+sampleGeneralizedLKTrajectory <- function(prey.initial.size,
+                                          pred.initial.size,
+                                          preyBirthFxn,
+                                          preyDeathFxn,
+                                          predBirthFxn,
+                                          predDeathFxn,
+                                          prey.birth.parameters,
+                                          prey.death.parameters,
+                                          pred.birth.parameters,
+                                          pred.death.parameters,
+                                          sampled.times,
+                                          n.steps) {
+  # recover()
+  
+  # Calculate time slice size
+  # We don't solve any differential equations here
+  # We just take tiny steps along the population trajectory given the slope at an instant
+  # If the step size is sufficiently small, this is a passable approximation of more complicated techniques
+  h <- (max(sampled.times) - min(sampled.times))/(n.steps)
+  
+  # For storing information, nsteps+1 because we're starting at t=0
+  prey_trajectory <- numeric(n.steps+1)
+  pred_trajectory <- numeric(n.steps+1)
+  
+  # Given initial sizes
+  prey_trajectory[1] <- prey.initial.size
+  pred_trajectory[1] <- pred.initial.size
+  
+  # A step at a time, simulate next step
+  for (t in 1:n.steps) {
+    prey_slope <- getPreySlope(prey.size=prey_trajectory[t],
+                               pred.size=pred_trajectory[t],
+                               preyBirthFxn=preyBirthFxn,
+                               preyDeathFxn=preyDeathFxn,
+                               prey.birth.parameters=prey.birth.parameters,
+                               prey.death.parameters=prey.death.parameters)
+    pred_slope <- getPredSlope(prey.size=prey_trajectory[t],
+                               pred.size=pred_trajectory[t],
+                               predBirthFxn=predBirthFxn,
+                               predDeathFxn=predDeathFxn,
+                               pred.birth.parameters=pred.birth.parameters,
+                               pred.death.parameters=pred.death.parameters)
+    prey_trajectory[t+1] <- prey_trajectory[t]+prey_slope*h
+    pred_trajectory[t+1] <- pred_trajectory[t]+pred_slope*h
+  }
+  
+  # Filter to only the ones we needed
+  keep <- (min(sampled.times)+(0:n.steps)*h) %in% sampled.times
+  
+  if ( sum(keep) != length(sampled.times) ) {
+    stop("Error in sampleGeneralizedLKTrajectory, simulated times not matching real times. Are times evenly spaced?")
+  }
+  
+  prey_trajectory <- prey_trajectory[keep]
+  pred_trajectory <- pred_trajectory[keep]
+  
+  return(data.frame(prey_trajectory=prey_trajectory,pred_trajectory=pred_trajectory))
+  
+}
+
+# This is a helper function that combines birth and death rates into an overall growth rate
+getPreySlope <- function(prey.size,pred.size,preyBirthFxn,preyDeathFxn,prey.birth.parameters,prey.death.parameters) {
+  per_capita_slope <- preyBirthFxn(pred.size=pred.size,prey.size=prey.size,prey.birth.parameters=prey.birth.parameters) - 
+    preyDeathFxn(pred.size=pred.size,prey.size=prey.size,prey.death.parameters=prey.death.parameters)
+  return(per_capita_slope * prey.size)
+}
+
+# This is a helper function that combines birth and death rates into an overall growth rate
+getPredSlope <- function(prey.size,pred.size,predBirthFxn,predDeathFxn,pred.birth.parameters,pred.death.parameters) {
+  per_capita_slope <- predBirthFxn(pred.size=pred.size,prey.size=prey.size,pred.birth.parameters=pred.birth.parameters) - 
+    predDeathFxn(pred.size=pred.size,prey.size=prey.size,pred.death.parameters=pred.death.parameters)
+  return(per_capita_slope * pred.size)
+}
+
+# This function takes in fitted models and uses AIC (the Akaike Information Criterion) to compare models
+# The AIC seeks to balance the simplicity of a model (fewer parameters) with explanatory power (high likelihood)
+# This function returns the relative likelihoods of the input models, it does not have a particularly useful interpretation, other than as a plausibility relative to the best fit model
+# Technically speaking, the relative likelihood can be interpreted as being proportional to the probability that the ith model minimizes the (estimated) information loss
+# Takes the following argumens:
+#      fitted.models.list: a list of the fitted models from fitGeneralizedLotkaVolteraMaximumLikelihood (can make as list(fitted1,fitted2))
 compareModels <- function(fitted.models.list) {
   # recover()
   
@@ -384,8 +426,17 @@ compareModels <- function(fitted.models.list) {
   print(aic_rl)
 }
 
-
-
+# This function 
+# Takes the following argumens:
+#      prey.initial.size: the population size for the prey at the first time point
+#      pred.initial.size: the population size for the predator at the first time point
+#      preyBirthFxn: a function that returns the prey birth rate for given prey and predator population sizes and at least one additional parameter
+#      preyDeathFxn: a function that returns the prey death rate for given prey and predator population sizes and at least one additional parameter
+#      predBirthFxn: a function that returns the predator birth rate for given prey and predator population sizes and at least one additional parameter
+#      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
+#      fitted.models.list: a list of the fitted models from fitGeneralizedLotkaVolteraMaximumLikelihood (can make as list(fitted1,fitted2))
+#      n.sim: the number of trajectories to simulate
+# Optionally, using hexadecimal colors, colors for the simulated trajectories can be given with pred.color and prey.color
 visualizeGeneralizedLKModelFit <- function(data,
                                            preyBirthFxn,
                                            preyDeathFxn,
@@ -476,6 +527,8 @@ visualizeGeneralizedLKModelFit <- function(data,
   
 }
 
+# This function is called by fitGeneralizedLotkaVolteraMaximumLikelihood and checks the input birth and death rate functions for validity
+# Having 80 lines of error checking is cumbersome in the middle of an already long function
 assertAllFunctionsPassAllTests <- function(preyBirthFxn,
                                            preyDeathFxn,
                                            predBirthFxn,
