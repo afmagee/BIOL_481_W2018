@@ -18,12 +18,13 @@ plotPredatorPrey <- function(data) {
 #      predBirthFxn: a function that returns the predator birth rate for given prey and predator population sizes and at least one additional parameter
 #      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
 #      n.parameters.in.functions: a vector of length 4, the number of parameters for the functions in order preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn
-fitGeneralizedLotkaVolteraMaximumLikelihood function(data,
-                                                     preyBirthFxn,
-                                                     preyDeathFxn,
-                                                     predBirthFxn,
-                                                     predDeathFxn,
-                                                     n.parameters.in.functions,...) {
+fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
+                                                        preyBirthFxn,
+                                                        preyDeathFxn,
+                                                        predBirthFxn,
+                                                        predDeathFxn,
+                                                        n.parameters.in.functions,
+                                                        ...) {
   # recover()
   
   ## A boat-load of error checking
@@ -400,6 +401,18 @@ initializeLVGeneral <- function(data,
   
 }
 
+# This is a helper function for the full ML analysis
+# It initializes reasonable values of error terms and initial population sizes before the full ML analysis
+# Takes the following arguments:
+#      data: the data, as a dataframe with columns named time(s), pred(ator), and prey
+#      preyBirthFxn: a function that returns the prey birth rate for given prey and predator population sizes and at least one additional parameter
+#      preyDeathFxn: a function that returns the prey death rate for given prey and predator population sizes and at least one additional parameter
+#      predBirthFxn: a function that returns the predator birth rate for given prey and predator population sizes and at least one additional parameter
+#      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
+#      n.parameters.in.functions: a vector of length 4, the number of parameters for the functions in order preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn
+#      n.starting.points: how many random points should we start considering (we will take only a few for further consideration)?
+#      n.starting.points.to.optimize: How many of the above should we consider in more depth? We will take the n best
+# Returns a vector of starting parameters in the order prey birth, prey death, pred birth, pred death 
 initializeLVPopsAndErrors <- function(data,
                                       preyBirthFxn,
                                       preyDeathFxn,
@@ -548,7 +561,15 @@ logLikelihoodGeneralizedLV <- function(data,
                                         pred.death.parameters=pred.death.parameters,
                                         sampled.times=data$time,
                                         n.steps=n.steps)
-
+  
+  # Sometimes the path will have a population crash to 0, but it keeps slogging along and creates NaNs
+  # Here, if a population goes to 0, the probability of observing >0 individuals is 0 (lnL = -Inf)
+  # So we catch this and return -<very big number> (as a hack to avoid non-finite differences in optimization)
+  flat_path <- unlist(path) # path as a flat vector, can't use is.nan() and related functions on data.frames
+  if ( sum(is.nan(flat_path)) > 0 || sum(is.infinite(flat_path)) > 0 || sum(flat_path == 0) > 0 ) {
+    return(-.Machine$integer.max)
+  }
+  
   # Now it's just a measurement model
   lnL <- sum(dlnorm(data$prey,log(path$prey_trajectory),sigma1,log=TRUE)) + # measurements of prey pop sizes
     sum(dlnorm(data$pred,log(path$pred_trajectory),sigma2,log=TRUE)) # measurements of pred pop sizes
@@ -696,7 +717,10 @@ compareModels <- function(fitted.models.list) {
 #      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
 #      fitted.models.list: a list of the fitted models from fitGeneralizedLotkaVolteraMaximumLikelihood (can make as list(fitted1,fitted2))
 #      n.sim: the number of trajectories to simulate
-# Optionally, using hexadecimal colors, colors for the simulated trajectories can be given with pred.color and prey.color
+# Optionally, takes
+#      pred.color: a hexadecimal color used to plot simulated trajectories
+#      prey.color: a hexadecimal color used to plot simulated trajectories
+#      relative.y.limit: 
 visualizeGeneralizedLVModelFit <- function(data,
                                            preyBirthFxn,
                                            preyDeathFxn,
@@ -772,16 +796,24 @@ visualizeGeneralizedLVModelFit <- function(data,
     setTxtProgressBar(pb, i) # report progress
   }
   
-  # Plot model
+  ## Plot model
   
-  # # so we can put axes on same scale
-  # plot_max <- max(c(max(prey_sim),max(pred_sim))) # since there's measurement error, it's possible that there's a super-high predator pop size
+  # If sigmas and population sizes are too large, user may want to limit y-axis
+  # Here we allow specification of ylim as proportion of maximum observed y
+  if ( hasArg(relative.y.limit) ) {
+    ymax_prey <- list(...)$relative.y.limit*max(data$prey)
+    ymax_pred <- list(...)$relative.y.limit*max(data$pred)
+  } else {
+    ymax_prey <- max(prey_sim)
+    ymax_pred <- max(pred_sim)
+  }
+  
   
   par(mfrow=c(2,1),mai=c(0.8,0.8,0.2,0.2),xpd=TRUE)
-  matplot(x=data$time,prey_sim,col=prey_color,type="l",lty=1,xlab="time",ylab="prey pop size")
+  matplot(x=data$time,prey_sim,col=prey_color,type="l",lty=1,xlab="time",ylab="prey pop size",ylim=c(0,ymax_prey))
   lines(data$time,data$prey,lwd=3)
   
-  matplot(x=data$time,pred_sim,col=pred_color,type="l",lty=1,xlab="time",ylab="predator pop size")
+  matplot(x=data$time,pred_sim,col=pred_color,type="l",lty=1,xlab="time",ylab="predator pop size",ylim=c(0,ymax_pred))
   lines(data$time,data$pred,lwd=3)
   par(mfrow=c(1,1))
   
