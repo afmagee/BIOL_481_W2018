@@ -18,15 +18,14 @@ plotPredatorPrey <- function(data) {
 #      predBirthFxn: a function that returns the predator birth rate for given prey and predator population sizes and at least one additional parameter
 #      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
 #      n.parameters.in.functions: a vector of length 4, the number of parameters for the functions in order preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn
-# Optionally, takes
-#      n.initialization.attempts: how many starting points to consider (default 1000, some datasets are unstable and need more)
+#      n.initialization.attempts: how many starting points to consider (default 2000, some datasets are unstable and need more)
 fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
                                                         preyBirthFxn,
                                                         preyDeathFxn,
                                                         predBirthFxn,
                                                         predDeathFxn,
                                                         n.parameters.in.functions,
-                                                        ...) {
+                                                        n.initialization.attempts=2000) {
   # recover()
   
   ## A boat-load of error checking
@@ -57,19 +56,13 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   
   cat("Initializing model, please be patient!\n")
   
-  if ( hasArg(n.initialization.attempts) ) {
-    initialization_attempts <- list(...)$n.initialization.attempts
-  } else {
-    initialization_attempts <- 1000
-  }
-  
   init_opts <- initializeLVGeneral(data,
                                    preyBirthFxn,
                                    preyDeathFxn,
                                    predBirthFxn,
                                    predDeathFxn,
                                    n.parameters.in.functions,
-                                   initialization_attempts,
+                                   n.initialization.attempts,
                                    10)
   
   # recover()
@@ -672,6 +665,13 @@ visualizeGeneralizedLVModelFit <- function(data,
   
   # recover()
   
+  ## Check inputs
+  if ( class(data) != "data.frame" ) {
+    stop("Error in visualizeGeneralizedLVModelFit, data must be a data.frame")
+  }
+  if  ( class(fitted.model) != "list" ) {
+    stop("Error in visualizeGeneralizedLVModelFit, is fitted.model the output of fitGeneralizedLotkaVolteraMaximumLikelihood?")
+  }
   # Useful things
   n_time_points <- length(data$time)
   
@@ -701,6 +701,23 @@ visualizeGeneralizedLVModelFit <- function(data,
   fitted_pred_init <- fitted.model$maximum.likelihood.parameter.estimates[is_pred_init]
   fitted_sigma1 <- fitted.model$maximum.likelihood.parameter.estimates[is_sigma1]
   fitted_sigma2 <- fitted.model$maximum.likelihood.parameter.estimates[is_sigma2]
+  
+  # Check we can find birth-death parameters
+  if ( class(fitted_prey_birth) != "numeric" || class(fitted_prey_death) != "numeric" || class(fitted_pred_birth) != "numeric" || class(fitted_pred_death) != "numeric") {
+    stop("Error in visualizeGeneralizedLVModelFit, cannot find birth-death parameters in fitted.model, is this argument the ouput of fitGeneralizedLotkaVolteraMaximumLikelihood?")
+  }
+
+  # Check we can find birth-death parameters
+  if ( class(fitted_prey_init) != "numeric" || class(fitted_pred_init) != "numeric" || class(fitted_sigma1) != "numeric" || class(fitted_sigma2) != "numeric") {
+    stop("Error in visualizeGeneralizedLVModelFit, cannot find error terms or initial population size parameters in fitted.model, is this argument the ouput of fitGeneralizedLotkaVolteraMaximumLikelihood?")
+  }
+  
+  # Check that the fitted model object contains the right number of parameters
+  assertAllFunctionsPassAllTests(preyBirthFxn,
+                                 preyDeathFxn,
+                                 predBirthFxn,
+                                 predDeathFxn,
+                                 c(length(fitted_prey_birth),length(fitted_prey_death),length(fitted_pred_birth),length(fitted_pred_death)))
   
   # Simulate trajectories from model
   pred_sim <- matrix(NA,nrow=n_time_points,ncol=n.sim)
