@@ -7,7 +7,7 @@ simulated.data <- sampleGeneralizedLKTrajectory(
   preyDeathLK,
   predBirthLK,
   predDeathLK,
-  c(0.8),
+  c(0.9),
   c(0.01),
   c(0.01),
   c(0.9),
@@ -20,7 +20,7 @@ simulated.data$times <- c(1:21)
 plotPredatorPrey(simulated.data)
 
 sigma.prey <- 0.1
-sigma.pred <- 0.2
+sigma.pred <- 0.1
 
 simulated.data$prey_trajectory <- rlnorm(21,log(simulated.data$prey_trajectory),sigma.prey)
 simulated.data$pred_trajectory <- rlnorm(21,log(simulated.data$pred_trajectory),sigma.pred)

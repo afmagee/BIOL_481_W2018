@@ -1,4 +1,3 @@
-# Plots the observed predator and prey population trajectories
 # Takes the following arguments:
 #      data: the data, as a dataframe with columns named time(s), pred(ator), and prey
 plotPredatorPrey <- function(data) {
@@ -53,84 +52,103 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   # After this, we condition on these values and find reasonable starting values of the errors
   # Lastly, we take all the above as starting values and find the maximum likelihood solution
   
-  # observed changes
-  observed_dPrey <- (data$prey[3:dim(data)[1]] - data$prey[1:(dim(data)[1]-2)])/(data$time[3:dim(data)[1]] - data$time[1:(dim(data)[1]-2)]) #nrow is slower than dim()[1] for esoteric reasons
-  observed_dPred <- (data$pred[3:dim(data)[1]] - data$pred[1:(dim(data)[1]-2)])/(data$time[3:dim(data)[1]] - data$time[1:(dim(data)[1]-2)])
-  
-  # Establish where the parameters will be during optimization
-  prey_birth_indices <- 1:(0+n.parameters.in.functions[1])
-  prey_death_indices <- (1+n.parameters.in.functions[1]):(0+sum(n.parameters.in.functions[1:2]))
-  pred_birth_indices <- (1+sum(n.parameters.in.functions[1:2])):(0+sum(n.parameters.in.functions[1:3]))
-  pred_death_indices <- (1+sum(n.parameters.in.functions[1:3])):(0+sum(n.parameters.in.functions[1:4]))
-  
-  # recover()
-  
-  fitInitWithDerivs <- function(par) {
-    # Get off log scale
-    par <- exp(par)
-    
-    # assign parameters to birth and death functions
-    prey_birth_parameters <- par[prey_birth_indices]
-    prey_death_parameters <- par[prey_death_indices]
-    pred_birth_parameters <- par[pred_birth_indices]
-    pred_death_parameters <- par[pred_death_indices]
-    
-    # calculate predicted slopes given model parameters
-    predicted_dPrey <- sapply(2:(dim(data)[1]-1),function(i){
-      getPreySlope(prey.size=data$prey[i],
-                   pred.size=data$pred[i],
-                   preyBirthFxn=preyBirthFxn,
-                   preyDeathFxn=preyDeathFxn,
-                   prey.birth.parameters=prey_birth_parameters,
-                   prey.death.parameters=prey_death_parameters)
-    })
-    predicted_dPred <- sapply(2:(dim(data)[1]-1),function(i){
-      getPredSlope(prey.size=data$prey[i],
-                   pred.size=data$pred[i],
-                   predBirthFxn=predBirthFxn,
-                   predDeathFxn=predDeathFxn,
-                   pred.birth.parameters=pred_birth_parameters,
-                   pred.death.parameters=pred_death_parameters)
-    })
-    
-    # Return sum of squared errors (from model predictions at these parameters to observed values)
-    return(
-      sum((predicted_dPrey - observed_dPrey)^2) + 
-        sum((predicted_dPred - observed_dPred)^2)
-    )
-  }
+  # # observed changes
+  # observed_dPrey <- (data$prey[3:dim(data)[1]] - data$prey[1:(dim(data)[1]-2)])/(data$time[3:dim(data)[1]] - data$time[1:(dim(data)[1]-2)]) #nrow is slower than dim()[1] for esoteric reasons
+  # observed_dPred <- (data$pred[3:dim(data)[1]] - data$pred[1:(dim(data)[1]-2)])/(data$time[3:dim(data)[1]] - data$time[1:(dim(data)[1]-2)])
+  # 
+  # # Establish where the parameters will be during optimization
+  # prey_birth_indices <- 1:(0+n.parameters.in.functions[1])
+  # prey_death_indices <- (1+n.parameters.in.functions[1]):(0+sum(n.parameters.in.functions[1:2]))
+  # pred_birth_indices <- (1+sum(n.parameters.in.functions[1:2])):(0+sum(n.parameters.in.functions[1:3]))
+  # pred_death_indices <- (1+sum(n.parameters.in.functions[1:3])):(0+sum(n.parameters.in.functions[1:4]))
+  # 
+  # # recover()
+  # 
+  # fitInitWithDerivs <- function(par) {
+  #   # Get off log scale
+  #   par <- exp(par)
+  #   
+  #   # # assign parameters to birth and death functions
+  #   # prey_birth_parameters <- par[prey_birth_indices]
+  #   # prey_death_parameters <- par[prey_death_indices]
+  #   # pred_birth_parameters <- par[pred_birth_indices]
+  #   # pred_death_parameters <- par[pred_death_indices]
+  #   
+  #   # calculate predicted slopes given model parameters
+  #   predicted_dPrey <- sapply(2:(dim(data)[1]-1),function(i){
+  #     getPreySlope(prey.size=data$prey[i],
+  #                  pred.size=data$pred[i],
+  #                  preyBirthFxn=preyBirthFxn,
+  #                  preyDeathFxn=preyDeathFxn,
+  #                  prey.birth.parameters=par[prey_birth_indices],
+  #                  prey.death.parameters=par[prey_death_indices])
+  #   })
+  #   predicted_dPred <- sapply(2:(dim(data)[1]-1),function(i){
+  #     getPredSlope(prey.size=data$prey[i],
+  #                  pred.size=data$pred[i],
+  #                  predBirthFxn=predBirthFxn,
+  #                  predDeathFxn=predDeathFxn,
+  #                  pred.birth.parameters=par[pred_birth_indices],
+  #                  pred.death.parameters=par[pred_death_indices])
+  #   })
+  #   
+  #   # Return sum of squared errors (from model predictions at these parameters to observed values)
+  #   return(
+  #     sum((predicted_dPrey - observed_dPrey)^2) + 
+  #       sum((predicted_dPred - observed_dPred)^2)
+  #   )
+  # }
+  # 
+  # cat("Initializing model, please be patient!\n")
+  # # Now we initialize a handful of times, and find the best starting values
+  # # log(0.5) is a good starting guess for the simpler models, but can lead to bad optimization for the others
+  # init_attempt_n_tries_deterministic <- 10
+  # init_attempt_n_tries_random <- 50
+  # init_opt_attempts <- vector("list",init_attempt_n_tries_deterministic+init_attempt_n_tries_random)
+  # init_opt_scores <- numeric(init_attempt_n_tries_deterministic+init_attempt_n_tries_random)
+  # 
+  # all_fn_eval_counts <- c(0,0)
+  # for (i in 1:init_attempt_n_tries_deterministic) {
+  #   init_opt_attempts[[i]] <- try(optim(rep(log(i/10),sum(n.parameters.in.functions)),fitInitWithDerivs,control=list(reltol=1e-3)),silent=TRUE)
+  #   if ( class(init_opt_attempts[[i]]) == "try-error" ) {
+  #     init_opt_scores[i] <- Inf
+  #   } else {
+  #     init_opt_scores[i] <- init_opt_attempts[[i]]$value
+  #     all_fn_eval_counts <- all_fn_eval_counts + init_opt_attempts[[i]]$counts
+  #   }
+  # }
+  # for (i in (1:init_attempt_n_tries_random)+init_attempt_n_tries_deterministic) {
+  #   init_opt_attempts[[i]] <- try(optim(log(runif(sum(n.parameters.in.functions),0.01,1.1)),fitInitWithDerivs,control=list(reltol=1e-3)),silent=TRUE)
+  #   if ( class(init_opt_attempts[[i]]) == "try-error" ) {
+  #     init_opt_scores[i] <- Inf
+  #   } else {
+  #     init_opt_scores[i] <- init_opt_attempts[[i]]$value
+  #     all_fn_eval_counts <- all_fn_eval_counts + init_opt_attempts[[i]]$counts
+  #   }
+  # }
+  # 
+  # cat(all_fn_eval_counts,"\n")
+  # 
+  # if ( all(is.infinite(init_opt_scores)) ) {
+  #   stop("Please provide starting values for optimization")
+  # }
+  # 
+  # # choose the best starting attempt
+  # best_init_index <- which(init_opt_scores == min(init_opt_scores))
+  # init_opts <- init_opt_attempts[[best_init_index]]
   
   cat("Initializing model, please be patient!\n")
-  # Now we initialize a handful of times, and find the best starting values
-  # log(0.5) is a good starting guess for the simpler models, but can lead to bad optimization for the others
-  init_attempt_n_tries_deterministic <- 10
-  init_attempt_n_tries_random <- 50
-  init_opt_attempts <- vector("list",init_attempt_n_tries_deterministic+init_attempt_n_tries_random)
-  init_opt_scores <- numeric(init_attempt_n_tries_deterministic+init_attempt_n_tries_random)
-  for (i in 1:init_attempt_n_tries_deterministic) {
-    init_opt_attempts[[i]] <- try(optim(rep(log(i/10),sum(n.parameters.in.functions)),fitInitWithDerivs),silent=TRUE)
-    if ( class(init_opt_attempts[[i]]) == "try-error" ) {
-      init_opt_scores[i] <- Inf
-    } else {
-      init_opt_scores[i] <- init_opt_attempts[[i]]$value
-    }
-  }
-  for (i in (1:init_attempt_n_tries_random)+init_attempt_n_tries_deterministic) {
-    init_opt_attempts[[i]] <- try(optim(log(runif(sum(n.parameters.in.functions),0.1,1.1)),fitInitWithDerivs),silent=TRUE)
-    if ( class(init_opt_attempts[[i]]) == "try-error" ) {
-      init_opt_scores[i] <- Inf
-    } else {
-      init_opt_scores[i] <- init_opt_attempts[[i]]$value
-    }
-  }
   
-  if ( all(is.infinite(init_opt_scores)) ) {
-    stop("Please provide starting values for optimization")
-  }
+  init_opts <- initializeLVGeneral(data,
+                                   preyBirthFxn,
+                                   preyDeathFxn,
+                                   predBirthFxn,
+                                   predDeathFxn,
+                                   n.parameters.in.functions,
+                                   1000,
+                                   10)
   
-  # choose the best starting attempt
-  best_init_index <- which(init_opt_scores == min(init_opt_scores))
-  init_opts <- init_opt_attempts[[best_init_index]]
+  recover()
   
   ## Prepare for more thourough optimization
   
@@ -140,7 +158,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   total_time <- max(data$time) - min(data$time)
   
   # For final optimization, smaller steps
-  steps_per_interval_final <- floor(5000/total_time)
+  steps_per_interval_final <- floor(4000/total_time)
   n_steps_final <- total_time*steps_per_interval_final
   
   # For initial, less precise is fine
@@ -151,11 +169,17 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   
   ## Optimization step 2
   
+  # Establish where the parameters will be during optimization
+  prey_birth_indices <- 1:(0+n.parameters.in.functions[1])
+  prey_death_indices <- (1+n.parameters.in.functions[1]):(0+sum(n.parameters.in.functions[1:2]))
+  pred_birth_indices <- (1+sum(n.parameters.in.functions[1:2])):(0+sum(n.parameters.in.functions[1:3]))
+  pred_death_indices <- (1+sum(n.parameters.in.functions[1:3])):(0+sum(n.parameters.in.functions[1:4]))
+  
   # Find area near peak for starting sizes and errors, conditioning on approximate parameters from least squares derivative fitting
   # If we don't do this, we can easily get lost in crazy parameters (optimization is unstable!)
   # A more principled approach is to start optimization many times in many places (parameter combinations), but this is too slow for a 2 hour lab, given the time to optimize
   fnLKInitAndVar <- function(par) {
-    -logLikelihoodGeneralizedLK(data=data,
+    -logLikelihoodGeneralizedLV(data=data,
                                 prey.initial.size=par[1],
                                 pred.initial.size=par[2],
                                 sigma1=par[3],
@@ -164,10 +188,10 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
                                 preyDeathFxn=preyDeathFxn,
                                 predBirthFxn=predBirthFxn,
                                 predDeathFxn=predDeathFxn,
-                                prey.birth.parameters=init_opts$par[prey_birth_indices],
-                                prey.death.parameters=init_opts$par[prey_death_indices],
-                                pred.birth.parameters=init_opts$par[pred_birth_indices],
-                                pred.death.parameters=init_opts$par[pred_death_indices],
+                                prey.birth.parameters=init_opts[prey_birth_indices],
+                                prey.death.parameters=init_opts[prey_death_indices],
+                                pred.birth.parameters=init_opts[pred_birth_indices],
+                                pred.death.parameters=init_opts[pred_death_indices],
                                 n.steps=n_steps_initial,
                                 parameters.are.log.scale=TRUE)
   }
@@ -184,7 +208,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   pred_death_indices <- 4+(1+sum(n.parameters.in.functions[1:3])):(0+sum(n.parameters.in.functions[1:4]))
   
   fnLKforOptimML <- function(par) {
-    -logLikelihoodGeneralizedLK(data=data,
+    -logLikelihoodGeneralizedLV(data=data,
                                 prey.initial.size=par[1],
                                 pred.initial.size=par[2],
                                 sigma1=par[3],
@@ -202,7 +226,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   }
   
   cat("Fitting model, please be patient!\n")
-  opt_ml <- optim(c(opts$par,init_opts$par),fnLKforOptimML,method="BFGS",hessian=TRUE)
+  opt_ml <- optim(c(opts$par,init_opts),fnLKforOptimML,method="BFGS",hessian=TRUE)
   
   # recover()
   
@@ -229,6 +253,170 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   
 }
 
+# This is a helper function for the full ML analysis
+# It uses the observed derivatives and least squares to fit the birth and death rate parameters
+# These values are not the ones ML will return, but they are computable much more quickly
+# Since this setup takes the population sizes at a given time to be true (no error) it also allows us to estimate predator and prey separately, a further speed boost
+# Thus, we can explore a wider space of staring values here, and then polish with ML (which is much slower here)
+# Takes the following arguments:
+#      data: the data, as a dataframe with columns named time(s), pred(ator), and prey
+#      preyBirthFxn: a function that returns the prey birth rate for given prey and predator population sizes and at least one additional parameter
+#      preyDeathFxn: a function that returns the prey death rate for given prey and predator population sizes and at least one additional parameter
+#      predBirthFxn: a function that returns the predator birth rate for given prey and predator population sizes and at least one additional parameter
+#      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
+#      n.parameters.in.functions: a vector of length 4, the number of parameters for the functions in order preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn
+#      n.starting.points: how many random points should we start considering (we will take only a few for further consideration)?
+#      n.starting.points.to.optimize: How many of the above should we consider in more depth? We will take the n best
+# Returns a vector of starting parameters in the order prey birth, prey death, pred birth, pred death 
+initializeLVGeneral <- function(data,
+                                preyBirthFxn,
+                                preyDeathFxn,
+                                predBirthFxn,
+                                predDeathFxn,
+                                n.parameters.in.functions,
+                                n.starting.points,
+                                n.starting.points.to.optimize) {
+  
+  # recover()
+  
+  # observed changes at given times
+  observed_dPrey <- (data$prey[3:dim(data)[1]] - data$prey[1:(dim(data)[1]-2)])/(data$time[3:dim(data)[1]] - data$time[1:(dim(data)[1]-2)]) #nrow is slower than dim()[1] for esoteric reasons
+  observed_dPred <- (data$pred[3:dim(data)[1]] - data$pred[1:(dim(data)[1]-2)])/(data$time[3:dim(data)[1]] - data$time[1:(dim(data)[1]-2)])
+  
+  ## Least squares for prey trajectory
+  
+  # Establish where the parameters will be during optimization for prey parameters
+  prey_birth_indices <- 1:(0+n.parameters.in.functions[1])
+  prey_death_indices <- (1+n.parameters.in.functions[1]):(0+sum(n.parameters.in.functions[1:2]))
+  
+  # recover()
+  
+  # Calculates the sum of squared errors from model/predicted derivatives to observed derivatives
+  sumOfSquaresDerivativesPrey <- function(par) {
+    # calculate predicted slopes given model parameters
+    predicted_dPrey <- sapply(2:(dim(data)[1]-1),function(i){
+      getPreySlope(prey.size=data$prey[i],
+                   pred.size=data$pred[i],
+                   preyBirthFxn=preyBirthFxn,
+                   preyDeathFxn=preyDeathFxn,
+                   prey.birth.parameters=par[prey_birth_indices],
+                   prey.death.parameters=par[prey_death_indices])
+    })
+
+    # Return sum of squared errors (from model predictions at these parameters to observed values)
+    return(sum((predicted_dPrey - observed_dPrey)^2))
+  }
+  
+  # Layout points for initializing, points are sampled from half-Cauchy to ensure some large values which will be needed to initialize density-dependent models with any accuracy
+  # Since we have no prior information on what kind of parameter each one is, we sample all from the same distribution
+  # Each starting point is a combination of parameter values for the given birth and death rate functions
+  random_vals <- abs(rcauchy(n.starting.points*sum(n.parameters.in.functions[1:2]),0,0.33))
+  prey_random_grid <- matrix(random_vals,nrow=n.starting.points,ncol=sum(n.parameters.in.functions[1:2]))
+  
+  # Loop over rows, calculate how decent a fit this is
+  sum_squares_prey <- apply(prey_random_grid,1,sumOfSquaresDerivativesPrey)
+  
+  prey_starting_points_rankings <- order(sum_squares_prey)
+  
+  # New function for optimizing (have to put params on log scale so they aren't bounded)
+  sumOfSquaresDerivativesPrey <- function(par) {
+    
+    par <- exp(par)
+    
+    # calculate predicted slopes given model parameters
+    predicted_dPrey <- sapply(2:(dim(data)[1]-1),function(i){
+      getPreySlope(prey.size=data$prey[i],
+                   pred.size=data$pred[i],
+                   preyBirthFxn=preyBirthFxn,
+                   preyDeathFxn=preyDeathFxn,
+                   prey.birth.parameters=par[prey_birth_indices],
+                   prey.death.parameters=par[prey_death_indices])
+    })
+    
+    # Return sum of squared errors (from model predictions at these parameters to observed values)
+    return(sum((predicted_dPrey - observed_dPrey)^2))
+  }
+  
+  # loop over the best set of potential starting points, and optimize
+  prey_init_opts <- lapply(prey_starting_points_rankings[1:n.starting.points.to.optimize],function(i){
+    try(optim(log(prey_random_grid[i,]),sumOfSquaresDerivativesPrey,control=list(reltol=1e-4)),silent=TRUE)
+  })
+  
+  # Find best of these, those are our initial prey optimization parameters
+  sum_squares_prey <- numeric(n.starting.points.to.optimize)
+  for (i in 1:n.starting.points.to.optimize) {
+    sum_squares_prey[i] <- ifelse(class(prey_init_opts[[i]]) == "try-error", Inf, prey_init_opts[[i]]$value)
+  }
+  prey_start <- prey_init_opts[[which(sum_squares_prey == min(sum_squares_prey))]]$par
+  
+  ## Least squares for predator trajectory
+  
+  # Establish where the parameters will be during optimization for predator parameters
+  pred_birth_indices <- 1:(0+n.parameters.in.functions[3])
+  pred_death_indices <- (1+n.parameters.in.functions[3]):(0+sum(n.parameters.in.functions[3:4]))
+  
+  sumOfSquaresDerivativesPred <- function(par) {
+    # calculate predicted slopes given model parameters
+    predicted_dPred <- sapply(2:(dim(data)[1]-1),function(i){
+      getPredSlope(prey.size=data$prey[i],
+                   pred.size=data$pred[i],
+                   predBirthFxn=predBirthFxn,
+                   predDeathFxn=predDeathFxn,
+                   pred.birth.parameters=par[pred_birth_indices],
+                   pred.death.parameters=par[pred_death_indices])
+    })
+    
+    # Return sum of squared errors (from model predictions at these parameters to observed values)
+    return(sum((predicted_dPred - observed_dPred)^2))
+  }
+  
+  # Layout points for initializing, points are sampled from half-Cauchy to ensure some large values which will be needed to initialize density-dependent models with any accuracy
+  # Since we have no prior information on what kind of parameter each one is, we sample all from the same distribution
+  # Each starting point is a combination of parameter values for the given birth and death rate functions
+  random_vals <- abs(rcauchy(n.starting.points*sum(n.parameters.in.functions[3:4]),0,0.33))
+  pred_random_grid <- matrix(random_vals,nrow=n.starting.points,ncol=sum(n.parameters.in.functions[3:4]))
+  
+  # Loop over rows, calculate how decent a fit this is
+  sum_squares_pred <- apply(pred_random_grid,1,sumOfSquaresDerivativesPred)
+  
+  pred_starting_points_rankings <- order(sum_squares_pred)
+  
+  # New function for optimizing (have to put params on log scale so they aren't bounded)
+  
+  sumOfSquaresDerivativesPred <- function(par) {
+    # Get off log scale
+    par <- exp(par)
+    
+    # calculate predicted slopes given model parameters
+    predicted_dPred <- sapply(2:(dim(data)[1]-1),function(i){
+      getPredSlope(prey.size=data$prey[i],
+                   pred.size=data$pred[i],
+                   predBirthFxn=predBirthFxn,
+                   predDeathFxn=predDeathFxn,
+                   pred.birth.parameters=par[pred_birth_indices],
+                   pred.death.parameters=par[pred_death_indices])
+    })
+    
+    # Return sum of squared errors (from model predictions at these parameters to observed values)
+    return(sum((predicted_dPred - observed_dPred)^2))
+  }
+  
+  # loop over the best set of potential starting points, and optimize
+  pred_init_opts <- lapply(pred_starting_points_rankings[1:n.starting.points.to.optimize],function(i){
+    try(optim(log(pred_random_grid[i,]),sumOfSquaresDerivativesPred,control=list(reltol=1e-4)),silent=TRUE)
+  })
+  
+  # Find best of these, those are our initial pred optimization parameters
+  sum_squares_pred <- numeric(n.starting.points.to.optimize)
+  for (i in 1:n.starting.points.to.optimize) {
+    sum_squares_pred[i] <- ifelse(class(pred_init_opts[[i]]) == "try-error", Inf, pred_init_opts[[i]]$value)
+  }
+  pred_start <- pred_init_opts[[which(sum_squares_pred == min(sum_squares_pred))]]$par
+  
+  return(c(prey_start,pred_start))
+  
+}
+
 # Calculates the likelihood for a generalized class of Lotka-Voltera models
 # Takes the following argumens:
 #      data: the data, as a dataframe with columns named time(s), pred(ator), and prey
@@ -245,7 +433,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
 #      sigma1: the value of sigma for the (lognormal) error of prey measurements
 #      sigma2: the value of sigma for the (lognormal) error of predator measurements
 #      parameters.are.log.scale: are the parameter values given on the log scale? (They will be for optimization)
-logLikelihoodGeneralizedLK <- function(data,
+logLikelihoodGeneralizedLV <- function(data,
                                        prey.initial.size,
                                        pred.initial.size,
                                        preyBirthFxn,
@@ -437,7 +625,7 @@ compareModels <- function(fitted.models.list) {
 #      fitted.models.list: a list of the fitted models from fitGeneralizedLotkaVolteraMaximumLikelihood (can make as list(fitted1,fitted2))
 #      n.sim: the number of trajectories to simulate
 # Optionally, using hexadecimal colors, colors for the simulated trajectories can be given with pred.color and prey.color
-visualizeGeneralizedLKModelFit <- function(data,
+visualizeGeneralizedLVModelFit <- function(data,
                                            preyBirthFxn,
                                            preyDeathFxn,
                                            predBirthFxn,
