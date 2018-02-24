@@ -99,7 +99,8 @@ system.time({
                                                        preyDeathFxn=preyDeathLK,
                                                        predBirthFxn=predBirthDensityDependent2,
                                                        predDeathFxn=predDeathLK,
-                                                       n.parameters.in.functions=c(2,1,2,1))
+                                                       n.parameters.in.functions=c(2,1,2,1),
+                                                       n.initialization.attempts = 2000)
 })
 
 system.time({
