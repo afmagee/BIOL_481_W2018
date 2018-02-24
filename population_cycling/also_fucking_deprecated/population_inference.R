@@ -18,12 +18,12 @@ plotPredatorPrey <- function(data) {
 #      predBirthFxn: a function that returns the predator birth rate for given prey and predator population sizes and at least one additional parameter
 #      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
 #      n.parameters.in.functions: a vector of length 4, the number of parameters for the functions in order preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn
-fitGeneralizedLotkaVolteraMaximumLikelihood function(data,
-                                                     preyBirthFxn,
-                                                     preyDeathFxn,
-                                                     predBirthFxn,
-                                                     predDeathFxn,
-                                                     n.parameters.in.functions,...) {
+fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
+                                                        preyBirthFxn,
+                                                        preyDeathFxn,
+                                                        predBirthFxn,
+                                                        predDeathFxn,
+                                                        n.parameters.in.functions,...) {
   # recover()
   
   ## A boat-load of error checking
@@ -42,7 +42,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood function(data,
   # There are many things we have to check for the input functions, so we outsource it to a different function
   # The error-checking function will fail loudly and stop everything from proceeding
   assertAllFunctionsPassAllTests(preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn,n.parameters.in.functions)
-  
+
   ## First-pass estimation with derivatives, following Howard
   
   # The problem here is that starting with crazy optimization values can take forever and then yield crazy results
@@ -148,7 +148,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood function(data,
                                    1000,
                                    10)
   
-  # recover()
+  recover()
   
   ## Prepare for more thourough optimization
   
@@ -169,18 +169,35 @@ fitGeneralizedLotkaVolteraMaximumLikelihood function(data,
   
   ## Optimization step 2
   
+  # Establish where the parameters will be during optimization
+  prey_birth_indices <- 1:(0+n.parameters.in.functions[1])
+  prey_death_indices <- (1+n.parameters.in.functions[1]):(0+sum(n.parameters.in.functions[1:2]))
+  pred_birth_indices <- (1+sum(n.parameters.in.functions[1:2])):(0+sum(n.parameters.in.functions[1:3]))
+  pred_death_indices <- (1+sum(n.parameters.in.functions[1:3])):(0+sum(n.parameters.in.functions[1:4]))
+  
   # Find area near peak for starting sizes and errors, conditioning on approximate parameters from least squares derivative fitting
   # If we don't do this, we can easily get lost in crazy parameters (optimization is unstable!)
   # A more principled approach is to start optimization many times in many places (parameter combinations), but this is too slow for a 2 hour lab, given the time to optimize
+  fnLKInitAndVar <- function(par) {
+    -logLikelihoodGeneralizedLV(data=data,
+                                prey.initial.size=par[1],
+                                pred.initial.size=par[2],
+                                sigma1=par[3],
+                                sigma2=par[4],
+                                preyBirthFxn=preyBirthFxn,
+                                preyDeathFxn=preyDeathFxn,
+                                predBirthFxn=predBirthFxn,
+                                predDeathFxn=predDeathFxn,
+                                prey.birth.parameters=init_opts[prey_birth_indices],
+                                prey.death.parameters=init_opts[prey_death_indices],
+                                pred.birth.parameters=init_opts[pred_birth_indices],
+                                pred.death.parameters=init_opts[pred_death_indices],
+                                n.steps=n_steps_initial,
+                                parameters.are.log.scale=TRUE)
+  }
+  
   cat("Preparing to fit model, please be patient!\n")
-  init_opts_2 <- initializeLVPopsAndErrors(data,
-                                           preyBirthFxn,
-                                           preyDeathFxn,
-                                           predBirthFxn,
-                                           predDeathFxn,
-                                           n.parameters.in.functions,
-                                           n_steps_initial,
-                                           init_opts)
+  opts <- optim(c(log(data$prey[1]),log(data$pred[1]),log(0.3),log(0.3)),fnLKInitAndVar,method="BFGS")
   
   ## Optimization step 3
   
@@ -209,7 +226,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood function(data,
   }
   
   cat("Fitting model, please be patient!\n")
-  opt_ml <- optim(c(init_opts_2,init_opts),fnLKforOptimML,method="BFGS",hessian=TRUE)
+  opt_ml <- optim(c(opts$par,init_opts),fnLKforOptimML,method="BFGS",hessian=TRUE)
   
   # recover()
   
@@ -400,95 +417,6 @@ initializeLVGeneral <- function(data,
   
 }
 
-initializeLVPopsAndErrors <- function(data,
-                                      preyBirthFxn,
-                                      preyDeathFxn,
-                                      predBirthFxn,
-                                      predDeathFxn,
-                                      n.parameters.in.functions,
-                                      n_steps_initial,
-                                      init_opts) {
-
-  # Establish where the parameters will be during optimization
-  prey_birth_indices <- 1:(0+n.parameters.in.functions[1])
-  prey_death_indices <- (1+n.parameters.in.functions[1]):(0+sum(n.parameters.in.functions[1:2]))
-  pred_birth_indices <- (1+sum(n.parameters.in.functions[1:2])):(0+sum(n.parameters.in.functions[1:3]))
-  pred_death_indices <- (1+sum(n.parameters.in.functions[1:3])):(0+sum(n.parameters.in.functions[1:4]))
-  
-  
-  fnInitPops <- function(par) {
-    -logLikelihoodGeneralizedLV(data=data,
-                                prey.initial.size=par[1],
-                                pred.initial.size=par[2],
-                                sigma1=-2.3, #~= log(0.1)
-                                sigma2=-2.3, #~= log(0.1)
-                                preyBirthFxn=preyBirthFxn,
-                                preyDeathFxn=preyDeathFxn,
-                                predBirthFxn=predBirthFxn,
-                                predDeathFxn=predDeathFxn,
-                                prey.birth.parameters=init_opts[prey_birth_indices],
-                                prey.death.parameters=init_opts[prey_death_indices],
-                                pred.birth.parameters=init_opts[pred_birth_indices],
-                                pred.death.parameters=init_opts[pred_death_indices],
-                                n.steps=n_steps_initial,
-                                parameters.are.log.scale=TRUE)
-  }
-  
-  opt_pops <- optim(c(log(data$prey[1]),log(data$pred[1])),fnInitPops,method="BFGS")
-  
-  # Grab the path laid out by these parameters, will use to get ML error terms
-  path <- sampleGeneralizedLKTrajectory(prey.initial.size=exp(opt_pops$par[1]),
-                                        pred.initial.size=exp(opt_pops$par[2]),
-                                        preyBirthFxn=preyBirthFxn,
-                                        preyDeathFxn=preyDeathFxn,
-                                        predBirthFxn=predBirthFxn,
-                                        predDeathFxn=predDeathFxn,
-                                        prey.birth.parameters=exp(init_opts[prey_birth_indices]),
-                                        prey.death.parameters=exp(init_opts[prey_death_indices]),
-                                        pred.birth.parameters=exp(init_opts[pred_birth_indices]),
-                                        pred.death.parameters=exp(init_opts[pred_death_indices]),
-                                        sampled.times=data$time,
-                                        n.steps=n_steps_initial)
-  
-  # Optimize first error term (for prey path)
-  fnInitErrors1 <- function(par) {
-    -sum(dlnorm(data$prey,log(path$prey_trajectory),par,log=TRUE))
-  }
-  
-  opt_error1 <- optimize(fnInitErrors1,interval=c(0,3))
-  
-  # Optimize second error term (for predator path)
-  fnInitErrors2 <- function(par) {
-    -sum(dlnorm(data$pred,log(path$pred_trajectory),par,log=TRUE))
-  }
-  
-  opt_error2 <- optimize(fnInitErrors2,interval=c(0,3))
-  
-  # Clean up by jointly optimizing all 4 things, starting at current best
-  fnInitPopsAndErrors <- function(par) {
-    # cat(exp(par),"\n")
-    -logLikelihoodGeneralizedLV(data=data,
-                                prey.initial.size=par[1],
-                                pred.initial.size=par[2],
-                                sigma1=par[3],
-                                sigma2=par[4],
-                                preyBirthFxn=preyBirthFxn,
-                                preyDeathFxn=preyDeathFxn,
-                                predBirthFxn=predBirthFxn,
-                                predDeathFxn=predDeathFxn,
-                                prey.birth.parameters=init_opts[prey_birth_indices],
-                                prey.death.parameters=init_opts[prey_death_indices],
-                                pred.birth.parameters=init_opts[pred_birth_indices],
-                                pred.death.parameters=init_opts[pred_death_indices],
-                                n.steps=n_steps_initial,
-                                parameters.are.log.scale=TRUE)
-  }
-  
-  opt_both <- optim(c(opt_pops$par,log(opt_error1$minimum),log(opt_error2$minimum)),fnInitPopsAndErrors,method="BFGS")
-  
-  return(opt_both$par)
-  
-}
 # Calculates the likelihood for a generalized class of Lotka-Voltera models
 # Takes the following argumens:
 #      data: the data, as a dataframe with columns named time(s), pred(ator), and prey
