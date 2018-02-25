@@ -62,7 +62,7 @@ visualizeGeneralizedLVModelFit(simulated.data,
                                preyDeathFxn=preyDeathLV,
                                predBirthFxn=predBirthLV,
                                predDeathFxn=predDeathLV,
-                               fit.lv)
+                               fit.dd)
 
 # Let's look at the next-best model
 visualizeGeneralizedLVModelFit(simulated.data,
@@ -70,5 +70,5 @@ visualizeGeneralizedLVModelFit(simulated.data,
                                preyDeathFxn=preyDeathLV,
                                predBirthFxn=predBirthLV,
                                predDeathFxn=predDeathLV,
-                               fit.dd)
+                               fit.lv)
 
