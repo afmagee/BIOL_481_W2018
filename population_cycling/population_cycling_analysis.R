@@ -76,6 +76,25 @@ visualizeGeneralizedLVModelFit(simulated.data,
 
 
 
+system.time({
+  mm.dd <- fitGeneralizedLotkaVolteraMaximumLikelihood(data=mm.data,
+                                                       preyBirthFxn=preyBirthDensityDependent,
+                                                       preyDeathFxn=preyDeathLK,
+                                                       predBirthFxn=predBirthLK,
+                                                       predDeathFxn=predDeathLK,
+                                                       n.parameters.in.functions=n.bd.params.dd)
+})
+
+system.time({
+  lh.lv <- fitGeneralizedLotkaVolteraMaximumLikelihood(data=lh.data,
+                                                        preyBirthFxn=preyBirthLK,
+                                                        preyDeathFxn=preyDeathLK,
+                                                        predBirthFxn=predBirthLK,
+                                                        predDeathFxn=predDeathLK,
+                                                        n.parameters.in.functions=n.bd.params.lk,
+                                                        n.initialization.attempts=1000)
+})
+
 
 system.time({
    ra.dd <- fitGeneralizedLotkaVolteraMaximumLikelihood(data=ra.data,
@@ -154,9 +173,10 @@ system.time({
                                                          n.parameters.in.functions=c(2,1,1,1))
 })
 
-visualizeGeneralizedLVModelFit(ra.data,
+visualizeGeneralizedLVModelFit(mr.data,
                                preyBirthFxn=preyBirthDensityDependent,
-                               preyDeathFxn=preyDeathIvlev,
-                               predBirthFxn=predBirthLK,
+                               preyDeathFxn=preyDeathLK,
+                               predBirthFxn=predBirthDensityDependent2,
                                predDeathFxn=predDeathLK,
-                               ra.ddivlev)
+                               mr.dddd,
+                               relative.y.limit=2)

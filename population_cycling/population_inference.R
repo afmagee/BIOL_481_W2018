@@ -207,14 +207,19 @@ initializeLVGeneral <- function(data,
     return(sum((predicted_dPrey - observed_dPrey)^2))
   }
   
-  # Layout points for initializing, points are sampled from half-Cauchy to ensure some large values which will be needed to initialize density-dependent models with any accuracy
-  # Since we have no prior information on what kind of parameter each one is, we sample all from the same distribution
-  # Each starting point is a combination of parameter values for the given birth and death rate functions
-  random_vals <- abs(rcauchy(n.starting.points*sum(n.parameters.in.functions[1:2]),0,0.33))
-  prey_random_grid <- matrix(random_vals,nrow=n.starting.points,ncol=sum(n.parameters.in.functions[1:2]))
+  # Layout points for initializing
+  # Space points logarithmically in a reasonable range
+  n_prey_param <- sum(n.parameters.in.functions[1:2])
+  n_starting_per_prey_param <- (n.starting.points)^(1/n_prey_param)
+  vals <- exp(seq(-5,5,length.out=n_starting_per_prey_param))
+  prey_start_list <- vector("list",n_prey_param)
+  for (i in 1:n_prey_param) {
+    prey_start_list[[i]] <- vals
+  }
+  prey_grid <- expand.grid(prey_start_list)
   
   # Loop over rows, calculate how decent a fit this is
-  sum_squares_prey <- apply(prey_random_grid,1,sumOfSquaresDerivativesPrey)
+  sum_squares_prey <- apply(prey_grid,1,sumOfSquaresDerivativesPrey)
   
   prey_starting_points_rankings <- order(sum_squares_prey)
   
@@ -239,7 +244,7 @@ initializeLVGeneral <- function(data,
   
   # loop over the best set of potential starting points, and optimize
   prey_init_opts <- lapply(prey_starting_points_rankings[1:n.starting.points.to.optimize],function(i){
-    try(optim(log(prey_random_grid[i,]),sumOfSquaresDerivativesPrey,control=list(reltol=1e-4)),silent=TRUE)
+    try(optim(log(prey_grid[i,]),sumOfSquaresDerivativesPrey,control=list(reltol=1e-4)),silent=TRUE)
   })
   
   # Find best of these, re-optimize with smaller tolerance
@@ -274,14 +279,19 @@ initializeLVGeneral <- function(data,
     return(sum((predicted_dPred - observed_dPred)^2))
   }
   
-  # Layout points for initializing, points are sampled from half-Cauchy to ensure some large values which will be needed to initialize density-dependent models with any accuracy
-  # Since we have no prior information on what kind of parameter each one is, we sample all from the same distribution
-  # Each starting point is a combination of parameter values for the given birth and death rate functions
-  random_vals <- abs(rcauchy(n.starting.points*sum(n.parameters.in.functions[3:4]),0,0.33))
-  pred_random_grid <- matrix(random_vals,nrow=n.starting.points,ncol=sum(n.parameters.in.functions[3:4]))
+  # Layout points for initializing
+  # Space points logarithmically in a reasonable range
+  n_pred_param <- sum(n.parameters.in.functions[3:4])
+  n_starting_per_pred_param <- (n.starting.points)^(1/n_pred_param)
+  vals <- exp(seq(-5,5,length.out=n_starting_per_pred_param))
+  pred_start_list <- vector("list",n_pred_param)
+  for (i in 1:n_pred_param) {
+    pred_start_list[[i]] <- vals
+  }
+  pred_grid <- expand.grid(pred_start_list)
   
   # Loop over rows, calculate how decent a fit this is
-  sum_squares_pred <- apply(pred_random_grid,1,sumOfSquaresDerivativesPred)
+  sum_squares_pred <- apply(pred_grid,1,sumOfSquaresDerivativesPred)
   
   pred_starting_points_rankings <- order(sum_squares_pred)
   
@@ -307,7 +317,7 @@ initializeLVGeneral <- function(data,
   
   # loop over the best set of potential starting points, and optimize
   pred_init_opts <- lapply(pred_starting_points_rankings[1:n.starting.points.to.optimize],function(i){
-    try(optim(log(pred_random_grid[i,]),sumOfSquaresDerivativesPred,control=list(reltol=1e-4)),silent=TRUE)
+    try(optim(log(pred_grid[i,]),sumOfSquaresDerivativesPred,control=list(reltol=1e-4)),silent=TRUE)
   })
   
   # Find best of these, those are our initial pred optimization parameters
@@ -317,7 +327,7 @@ initializeLVGeneral <- function(data,
   }
   pred_start <- pred_init_opts[[which(sum_squares_pred == min(sum_squares_pred))]]$par
   
-  pred_init_opts <- optim(log(pred_random_grid[i,]),sumOfSquaresDerivativesPred)
+  pred_init_opts <- optim(log(pred_grid[i,]),sumOfSquaresDerivativesPred)
   pred_start <- pred_init_opts$par
   
   return(c(prey_start,pred_start))
