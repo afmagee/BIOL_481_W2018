@@ -207,7 +207,7 @@ initializeLVGeneral <- function(data,
     return(sum((predicted_dPrey - observed_dPrey)^2))
   }
   
-  # Layout points for initializing
+  # Layout points for initializing (we may not hit the exact number the user asked for)
   # Space points logarithmically in a reasonable range
   n_prey_param <- sum(n.parameters.in.functions[1:2])
   n_starting_per_prey_param <- (n.starting.points)^(1/n_prey_param)
@@ -253,7 +253,7 @@ initializeLVGeneral <- function(data,
   for (i in 1:n.starting.points.to.optimize) {
     sum_squares_prey[i] <- ifelse(class(prey_init_opts[[i]]) == "try-error", Inf, prey_init_opts[[i]]$value)
   }
-  prey_start <- prey_init_opts[[which(sum_squares_prey == min(sum_squares_prey))]]$par
+  prey_start <- prey_init_opts[[which(sum_squares_prey == min(sum_squares_prey))[1]]]$par # We take [1] of the which() statement in case there are multiple values with the same endpoint (they're equally good, take any!)
   
   prey_init_opts <- optim(prey_start,sumOfSquaresDerivativesPrey)
   prey_start <- prey_init_opts$par
@@ -279,7 +279,7 @@ initializeLVGeneral <- function(data,
     return(sum((predicted_dPred - observed_dPred)^2))
   }
   
-  # Layout points for initializing
+  # Layout points for initializing (we may not hit the exact number the user asked for)
   # Space points logarithmically in a reasonable range
   n_pred_param <- sum(n.parameters.in.functions[3:4])
   n_starting_per_pred_param <- (n.starting.points)^(1/n_pred_param)
@@ -325,7 +325,7 @@ initializeLVGeneral <- function(data,
   for (i in 1:n.starting.points.to.optimize) {
     sum_squares_pred[i] <- ifelse(class(pred_init_opts[[i]]) == "try-error", Inf, pred_init_opts[[i]]$value)
   }
-  pred_start <- pred_init_opts[[which(sum_squares_pred == min(sum_squares_pred))]]$par
+  pred_start <- pred_init_opts[[which(sum_squares_pred == min(sum_squares_pred))[1]]]$par# We take [1] of the which() statement in case there are multiple values with the same endpoint (they're equally good, take any!)
   
   pred_init_opts <- optim(log(pred_grid[i,]),sumOfSquaresDerivativesPred)
   pred_start <- pred_init_opts$par

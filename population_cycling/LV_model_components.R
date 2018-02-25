@@ -3,22 +3,22 @@
 # The parameters are named to match what they are for (e.g. pred.birth.parameters for predator birth functions)
 
 ## The components of the basic Lotka-Voltera model
-predBirthLK <- function(pred.size,prey.size,pred.birth.parameters) {
+predBirthLV <- function(pred.size,prey.size,pred.birth.parameters) {
   # The birth rate of the predator is a linear function of the number of prey
   return(prey.size*pred.birth.parameters[1])
 }
 
-predDeathLK <- function(pred.size,prey.size,pred.death.parameters) {
+predDeathLV <- function(pred.size,prey.size,pred.death.parameters) {
   # The death rate of the predators is constant
   return(pred.death.parameters[1])
 }
 
-preyBirthLK <- function(pred.size,prey.size,prey.birth.parameters) {
+preyBirthLV <- function(pred.size,prey.size,prey.birth.parameters) {
   # The birth rate of the prey is constant
   return(prey.birth.parameters[1])
 }
 
-preyDeathLK <- function(pred.size,prey.size,prey.death.parameters) {
+preyDeathLV <- function(pred.size,prey.size,prey.death.parameters) {
   # The death rate of the prey is a linear function of the number of predators
   return(pred.size*prey.death.parameters[1])
 }
