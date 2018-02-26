@@ -19,7 +19,6 @@ n.bd.params.lk <- c(
 )
 
 # Now we fit it
-system.time({
 fit.lv <- fitGeneralizedLotkaVolteraMaximumLikelihood(data=simulated.data,
                                                       preyBirthFxn=preyBirthLV,
                                                       preyDeathFxn=preyDeathLV,
@@ -27,7 +26,9 @@ fit.lv <- fitGeneralizedLotkaVolteraMaximumLikelihood(data=simulated.data,
                                                       predDeathFxn=predDeathLV,
                                                       n.parameters.in.functions=n.bd.params.lk,
                                                       n.initialization.attempts=1000)
-})
+
+# What are our results for this model?
+fit.lv
 
 ## Fit a model like Lotka-Voltera, but where the prey birth rate declines as the population gets larger
 
@@ -40,15 +41,16 @@ n.bd.params.dd <- c(
 )
 
 # Now we fit it
-system.time({
-  fit.dd <- fitGeneralizedLotkaVolteraMaximumLikelihood(data=simulated.data,
-                                                        preyBirthFxn=preyBirthDensityDependent,
-                                                        preyDeathFxn=preyDeathLV,
-                                                        predBirthFxn=predBirthLV,
-                                                        predDeathFxn=predDeathLV,
-                                                        n.parameters.in.functions=n.bd.params.dd,
-                                                        n.initialization.attempts=1000)
-})
+fit.dd <- fitGeneralizedLotkaVolteraMaximumLikelihood(data=simulated.data,
+                                                      preyBirthFxn=preyBirthDensityDependent,
+                                                      preyDeathFxn=preyDeathLV,
+                                                      predBirthFxn=predBirthLV,
+                                                      predDeathFxn=predDeathLV,
+                                                      n.parameters.in.functions=n.bd.params.dd,
+                                                      n.initialization.attempts=1000)
+
+# What are our results for this model?
+fit.dd
 
 ## Now we have two competing explanations for our population dynamics. We should compare them
 compareModels(list(fit.lv,fit.dd))
@@ -56,19 +58,22 @@ compareModels(list(fit.lv,fit.dd))
 
 ## Did either of them do a decent job of recovering the real dynamics?
 
-# Let's look at the best model
-visualizeGeneralizedLVModelFit(simulated.data,
+# Let's look at the first model
+visualizeGeneralizedLVModelFit(data=simulated.data,
                                preyBirthFxn=preyBirthLV,
                                preyDeathFxn=preyDeathLV,
                                predBirthFxn=predBirthLV,
                                predDeathFxn=predDeathLV,
-                               fit.dd)
+                               fitted.model=fit.lv)
 
-# Let's look at the next-best model
-visualizeGeneralizedLVModelFit(simulated.data,
+# Let's look at the second model
+visualizeGeneralizedLVModelFit(data=simulated.data,
                                preyBirthFxn=preyBirthDensityDependent,
                                preyDeathFxn=preyDeathLV,
                                predBirthFxn=predBirthLV,
                                predDeathFxn=predDeathLV,
-                               fit.lv)
+                               fitted.model=fit.dd)
 
+# Before you hack this script to run your analyses, run this next line. 
+# It will clear everything we just did so you don't accidentally mix up simulated and real data
+rm(list=ls())

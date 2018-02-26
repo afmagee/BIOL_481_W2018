@@ -19,6 +19,9 @@ plotPredatorPrey <- function(data) {
 #      predDeathFxn: a function that returns the predator death rate for given prey and predator population sizes and at least one additional parameter
 #      n.parameters.in.functions: a vector of length 4, the number of parameters for the functions in order preyBirthFxn,preyDeathFxn,predBirthFxn,predDeathFxn
 #      n.initialization.attempts: how many starting points to consider (default 2000, some datasets are unstable and need more)
+# Optionally, takes
+#      initialize.grid.upper:
+#      initialize.grid.lower:
 fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
                                                         preyBirthFxn,
                                                         preyDeathFxn,
@@ -66,7 +69,7 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   if (hasArg(initialize.grid.lower)) {
     initialize_grid_lower <- list(...)$initialize.grid.lower
   } else {
-    initialize_grid_lower <- 5
+    initialize_grid_lower <- -5
   }
   cat("Initializing model, please be patient!\n")
   

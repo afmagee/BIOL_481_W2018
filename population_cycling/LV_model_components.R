@@ -23,7 +23,13 @@ preyDeathLV <- function(pred.size,prey.size,prey.death.parameters) {
   return(pred.size*prey.death.parameters[1])
 }
 
-## Different takes on prey death
+## Different models of prey birth rates (here density-dependent)
+preyBirthDensityDependent <- function(pred.size,prey.size,prey.birth.parameters) {
+  # Growth rate slows as population increases
+  return(prey.birth.parameters[1]*(1 - prey.size/prey.birth.parameters[2]))
+}
+
+## Different models of prey death rates
 preyDeathIvlev <- function(pred.size,prey.size,prey.death.parameters) {
   # From Chapter 5, May (1976), also called a Holling Type II (Invertebrate) response
   # This has Lotka-Voltera-like dynamics if the prey size is very large
@@ -36,7 +42,7 @@ preyDeathWatt <- function(pred.size,prey.size,prey.death.parameters) {
   return(prey.death.parameters[1]*(1 - exp(-prey.death.parameters[2]*prey.size*(pred.size^(1-prey.death.parameters[3])))))
 }
 
-## Density-dependent population birth rates
+## Different models of predator birth rates (here density-dependent)
 predBirthDensityDependent1 <- function(pred.size,prey.size,pred.birth.parameters) {
   # From Chapter 5, May (1976)
   # The predators have a growth rate all their own, but the carrying capacity depends on the prey population size
@@ -49,7 +55,3 @@ predBirthDensityDependent2 <- function(pred.size,prey.size,pred.birth.parameters
   return(prey.size*pred.birth.parameters[1]*(1 - pred.size/pred.birth.parameters[2]))
 }
 
-preyBirthDensityDependent <- function(pred.size,prey.size,prey.birth.parameters) {
-  # Growth rate slows as population increases
-  return(prey.birth.parameters[1]*(1 - prey.size/prey.birth.parameters[2]))
-}
