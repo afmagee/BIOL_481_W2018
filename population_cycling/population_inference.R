@@ -25,7 +25,8 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
                                                         predBirthFxn,
                                                         predDeathFxn,
                                                         n.parameters.in.functions,
-                                                        n.initialization.attempts=2000) {
+                                                        n.initialization.attempts=2000,
+                                                        ...) {
   # recover()
   
   ## A boat-load of error checking
@@ -54,6 +55,19 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
   # After this, we condition on these values and find reasonable starting values of the errors
   # Lastly, we take all the above as starting values and find the maximum likelihood solution
   
+  # The initialization checks a grid of parameter values, spaced in powers of 10, from 10^initialize_grid_lower to 10^initialize_grid_upper
+  # The default is a lower of -5 and upper of 5
+  # For most of these models that's fine, for some it may help to expand the upper bound (especially for large population sizes when estimating carrying capacities)
+  if ( hasArg(initialize.grid.upper) ) {
+    initialize_grid_upper <- list(...)$initialize.grid.upper
+  } else {
+    initialize_grid_upper <- 5
+  }
+  if (hasArg(initialize.grid.lower)) {
+    initialize_grid_lower <- list(...)$initialize.grid.lower
+  } else {
+    initialize_grid_lower <- 5
+  }
   cat("Initializing model, please be patient!\n")
   
   init_opts <- initializeLVGeneral(data,
@@ -63,7 +77,9 @@ fitGeneralizedLotkaVolteraMaximumLikelihood <- function(data,
                                    predDeathFxn,
                                    n.parameters.in.functions,
                                    n.initialization.attempts,
-                                   10)
+                                   10,
+                                   initialize_grid_upper,
+                                   initialize_grid_lower)
   
   # recover()
   
@@ -175,7 +191,9 @@ initializeLVGeneral <- function(data,
                                 predDeathFxn,
                                 n.parameters.in.functions,
                                 n.starting.points,
-                                n.starting.points.to.optimize) {
+                                n.starting.points.to.optimize,
+                                initialize.grid.upper=5,
+                                initialize.grid.lower=-5) {
   
   # recover()
   
@@ -211,7 +229,7 @@ initializeLVGeneral <- function(data,
   # Space points logarithmically in a reasonable range
   n_prey_param <- sum(n.parameters.in.functions[1:2])
   n_starting_per_prey_param <- (n.starting.points)^(1/n_prey_param)
-  vals <- exp(seq(-5,5,length.out=n_starting_per_prey_param))
+  vals <- exp(seq(initialize.grid.lower,initialize.grid.upper,length.out=n_starting_per_prey_param))
   prey_start_list <- vector("list",n_prey_param)
   for (i in 1:n_prey_param) {
     prey_start_list[[i]] <- vals
@@ -283,7 +301,7 @@ initializeLVGeneral <- function(data,
   # Space points logarithmically in a reasonable range
   n_pred_param <- sum(n.parameters.in.functions[3:4])
   n_starting_per_pred_param <- (n.starting.points)^(1/n_pred_param)
-  vals <- exp(seq(-5,5,length.out=n_starting_per_pred_param))
+  vals <- exp(seq(initialize.grid.lower,initialize.grid.upper,length.out=n_starting_per_pred_param))
   pred_start_list <- vector("list",n_pred_param)
   for (i in 1:n_pred_param) {
     pred_start_list[[i]] <- vals
